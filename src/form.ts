@@ -49,9 +49,9 @@ export async function showInput(): Promise<string> {
     ipcMain.once("input-value", (_event, value) => {
       ipcMain.removeListener("autocomplete-request", autocompleteHandler);
       resolve(value);
+      state.activeWindowRef = null;
       inputWindow?.close();
       inputWindow = null;
-      state.activeWindowRef = null;
     });
   });
 }

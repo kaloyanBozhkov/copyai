@@ -1,0 +1,19 @@
+### About
+In Ko Phagnan right now, it's 5.16AM and I just wrapped up a 4h code sesh. 
+Smoked a nice THC pre-rolled join with 50% weed and 50% leaf - first time!
+
+Got inspired to create this shortcut tool while working on RAG & AI System Messages for a another personal project.
+
+### Instructions
+Set this project to run on boot, with npm start
+
+Then simply: 
+CMD+D opens a 1 liner that enables you to run commands that copy a template to clipboard.
+
+
+### features
+- search has autocomplete for available template names and their args
+- tab to fill in the auto complete
+- tab tice to clear
+- templates can be grouped by category (e.g. comments.comment_top hello world)
+- TODO: autocomplete works only for template names, not categories yet. Will add if discriminating them is really a frequent action
