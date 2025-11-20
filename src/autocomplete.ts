@@ -2,7 +2,7 @@ import { allCategoryCommandsNameHashTable } from "./templateCommands";
 
 export const allCommandKeys = Object.keys(allCategoryCommandsNameHashTable);
 export const getClosestCommandKey = (input: string) => {
-  const key = allCommandKeys.find((key) => key.startsWith(input)) ?? "";
+  const key = allCommandKeys.find((key) => key.startsWith(input) && input !== key) ?? "";
   if (!key) {
     return {
       key: "",
@@ -23,3 +23,4 @@ export type AutocompleteResult = {
   key: string;
   args: string[];
 };
+

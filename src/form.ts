@@ -37,8 +37,9 @@ export async function showInput(): Promise<string> {
       _event: any,
       { searchValue, isTabPress }: { searchValue: string; isTabPress: boolean }
     ) => {
+      if (!inputWindow || inputWindow.isDestroyed()) return;
       const matchedResult = getClosestCommandKey(searchValue);
-      inputWindow?.webContents.send("autocomplete-result", {
+      inputWindow.webContents.send("autocomplete-result", {
         ...matchedResult,
         isTabPress,
       });

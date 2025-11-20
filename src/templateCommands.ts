@@ -5,13 +5,27 @@ export const MessageComposers: Record<
   Record<string, MessageComposer>
 > = {
   comments: {
-    comment_top: {
+    comment_frame: {
       messageRecipe: [
         "/* --------------------------------",
         "/*   $0",
         "/* -------------------------------- */",
       ],
-      ...messageBuilder(3),
+      ...messageBuilder(),
+    },
+    comment_frame_full: {
+      messageRecipe: [
+        "/* --------------------------------",
+        "/*   $0",
+        "/* -------------------------------- */",
+        "",
+        "",
+        "",
+        "/* --------------------------------",
+        "/*   $0",
+        "/* -------------------------------- */",
+      ],
+      ...messageBuilder(),
     },
   },
 } as const;

@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "tsc && electron ."
+    "start": "tsc && electron .",
+    "postinstall": "tsc && node scripts/setup-autostart.js"
   },
   "keywords": [],
   "author": "",
