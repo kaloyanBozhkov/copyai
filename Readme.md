@@ -1,6 +1,6 @@
 ### About
 In Ko Phagnan right now, it's 5.16AM and I just wrapped up a 4h code sesh. 
-Smoked a nice THC pre-rolled join with 50% weed and 50% leaf - first time!
+Smoked a nice THC pre-rolled joint with 50% weed and 50% leaf - first time!
 
 Got inspired to create this shortcut tool while working on RAG & AI System Messages for a another personal project.
 
