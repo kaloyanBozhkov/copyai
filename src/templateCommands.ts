@@ -32,9 +32,15 @@ const messageComposersPerCategory: Record<
       ],
       ...messageBuilder(),
     },
+  },
+  prompts: {
     tag: {
+      messageRecipe: ["<$0>$1<$0>"],
+      ...messageBuilder(),
+    },
+    system_message: {
       messageRecipe: [
-        "<$0>$1<$0>",
+        `<about></about>\n\n<instructions></instructions>\n\n<examples></examples>`,
       ],
       ...messageBuilder(),
     },

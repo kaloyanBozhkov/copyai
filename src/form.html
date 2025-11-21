@@ -24,7 +24,7 @@
         pointer-events: none;
       }
       input {
-        width: 100%;
+        width: calc(100% - 6px);
         height: 100%;
         border: none;
         outline: none;
@@ -35,22 +35,22 @@
         font-size: 16px;
         font-weight: 100;
         background-color: transparent;
+        background: none;
         pointer-events: auto;
       }
 
       #search {
         position: relative;
         top: -1px;
-        z-index: 3;
+        z-index: 2;
       }
 
       #autocomplete {
-        z-index: -1;
+        z-index: 1;
       }
 
       #argsInput {
-        z-index: -2;
-        background-color: white;
+        z-index: 0;
       }
 
       #autocomplete,
@@ -71,6 +71,8 @@
         width: 400px;
         height: 30px;
         pointer-events: auto;
+        background: white;
+        border-radius: 10px;
       }
 
       .center {
@@ -97,10 +99,12 @@
   </head>
   <body>
     <div class="center">
-      <div id="cmdInput">
-        <input id="search" type="text" autofocus />
-        <input id="autocomplete" type="text" disabled />
-        <input id="argsInput" type="text" disabled />
+      <div>
+        <div id="cmdInput">
+          <input id="search" type="text" autofocus />
+          <input id="autocomplete" type="text" disabled />
+          <input id="argsInput" type="text" disabled />
+        </div>
         <p>Made with ♥ by Koko</p>
       </div>
     </div>
@@ -114,8 +118,8 @@
 
       ipcRenderer.on("env-config", (_event, { isDevMode }) => {
         if (isDevMode) {
-         const madeBy =  document.querySelector("p");
-         madeBy.innerText += " (dev)";
+          const madeBy = document.querySelector("p");
+          madeBy.innerText += " (dev)";
         }
       });
 

@@ -14,16 +14,12 @@ export const messageBuilder = (stopAtOverwrite?: number) => {
         throw Error("config is odd");
       }
       const untilLine = Math.min(stopAt, messageRecipe.length);
-      let text = "";
-      for (let i = 0; i < untilLine; i++) {
-        text += messageRecipe[i];
-      }
-
+      let text = messageRecipe.slice(0, untilLine).join("\n");
       for (let i = 0; i < builderArgs.length; i++) {
         if (!builderArgs[i]) break;
         text = text.replaceAll(`$${i}`, builderArgs[i]);
       }
-      
+
       return text;
     },
   };

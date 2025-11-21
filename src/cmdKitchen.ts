@@ -3,6 +3,7 @@ import { messageComposers } from "./templateCommands";
 import { MessageComposer } from "./messageComposer";
 import { CommandExecutor } from "./commandExecutor";
 import { execs } from "./execs";
+import { countUniqueArgs } from "./helpers";
 
 const utensils = {
   ...execs,
@@ -53,12 +54,8 @@ export const getArgs = (key: string) => {
     return createArgsTemplate(argNamesList.length, argNamesList);
   }
 
-  const templateStringArgSplit = composer.messageRecipe
-    .join("")
-    .split(/\$[0-9]+/g);
-  const uniqueTemplateStringArgCount = new Set(templateStringArgSplit).size;
-
-  return createArgsTemplate(uniqueTemplateStringArgCount);
+  const uniqueArgsCount = countUniqueArgs(composer.messageRecipe.join(""));
+  return createArgsTemplate(uniqueArgsCount);
 };
 
 const createArgsTemplate = (argsCount: number, names?: string[]) => {
