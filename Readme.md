@@ -23,3 +23,10 @@ CMD+D+Shift
 ### next steps
 - Can have another shortcut to copy text following structued context that's been enforced by an LLM, with a UI/UX element (e.g. spinner) during any processing time.
 - For the above, add a sound on copy done
+
+
+### use case
+- You're writing system messages for tool, bots etc.. well just hit CMD+D and pick a template to paste and populate.
+- Need to run a node command quick? CMD+D + key
+
+Sky is the limit!
