@@ -5,10 +5,13 @@ Smoked a nice THC pre-rolled joint with 50% weed and 50% leaf - first time!
 Got inspired to create this shortcut tool while working on RAG & AI System Messages for a another personal project.
 
 ### Instructions
-Set this project to run on boot, with npm start
+Set this project to run on boot, with npm start. postinstall should set this up for you on mac.
 
 Then simply: 
 CMD+D opens a 1 liner that enables you to run commands that copy a template to clipboard.
+
+In dev:
+CMD+D+Shift
 
 
 ### features
