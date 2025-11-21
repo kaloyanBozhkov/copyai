@@ -17,47 +17,115 @@
         min-height: 0;
         margin: 0;
         padding: 0;
+        background: transparent;
+        background-color: transparent;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
       }
       input {
         width: 100%;
         height: 100%;
-        font-size: 16px;
-        position: absolute;
-        top: 0;
-        left: 0;
         border: none;
         outline: none;
         padding-left: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        border-radius: 10px;
+        pointer-events: auto;
+        font-size: 16px;
+        font-weight: 100;
+        background-color: transparent;
+        pointer-events: auto;
       }
 
       #search {
-        z-index: 2;
-        background-color: transparent;
+        position: relative;
+        top: -1px;
+        z-index: 3;
+      }
+
+      #autocomplete {
+        z-index: -1;
+      }
+
+      #argsInput {
+        z-index: -2;
+        background-color: white;
       }
 
       #autocomplete,
       #argsInput {
+        position: absolute;
+        inset: 0;
+        margin: auto;
         opacity: 0.6;
-        z-index: 1;
         pointer-events: none;
-        font-weight: 100;
       }
 
       #argsInput {
         color: #ff9100;
       }
+
+      #cmdInput {
+        position: relative;
+        width: 400px;
+        height: 30px;
+        pointer-events: auto;
+      }
+
+      .center {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100%;
+        width: 100%;
+        pointer-events: none;
+      }
+
+      p {
+        pointer-events: none;
+        font-size: 12px;
+        color: #666;
+        margin: 0;
+        padding: 0;
+        font-weight: 100;
+        text-align: right;
+        margin-top: 14px;
+      }
     </style>
   </head>
   <body>
-    <input id="search" type="text" autofocus />
-    <input id="autocomplete" type="text" disabled />
-    <input id="argsInput" type="text" disabled />
+    <div class="center">
+      <div id="cmdInput">
+        <input id="search" type="text" autofocus />
+        <input id="autocomplete" type="text" disabled />
+        <input id="argsInput" type="text" disabled />
+        <p>Made with ♥ by Koko</p>
+      </div>
+    </div>
 
     <script>
       const { ipcRenderer } = require("electron");
       const input = document.getElementById("search");
       const autocomplete = document.getElementById("autocomplete");
+      const cmdInput = document.getElementById("cmdInput");
       let tabsCount = 0;
+
+      ipcRenderer.on("env-config", (_event, { isDevMode }) => {
+        if (isDevMode) {
+         const madeBy =  document.querySelector("p");
+         madeBy.innerText += " (dev)";
+        }
+      });
+
+      // Handle mouse enter/leave for click-through
+      cmdInput.addEventListener("mouseenter", () => {
+        ipcRenderer.send("mouse-enter");
+      });
+      cmdInput.addEventListener("mouseleave", () => {
+        ipcRenderer.send("mouse-leave");
+      });
 
       // Listen for autocomplete results
       ipcRenderer.on(

@@ -32,6 +32,12 @@ const messageComposersPerCategory: Record<
       ],
       ...messageBuilder(),
     },
+    tag: {
+      messageRecipe: [
+        "<$0>$1<$0>",
+      ],
+      ...messageBuilder(),
+    },
   },
 } as const;
 

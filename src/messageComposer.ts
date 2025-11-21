@@ -8,15 +8,22 @@ export const messageBuilder = (stopAtOverwrite?: number) => {
     build(builderArgs: string[] = []) {
       const thisBound = this as unknown as MessageComposer;
       const { messageRecipe } = thisBound ?? {};
+
       const stopAt = stopAtOverwrite ?? messageRecipe.length;
       if (stopAt > messageRecipe.length) {
         throw Error("config is odd");
       }
-      const limited = Math.min(stopAt, messageRecipe.length);
-      let text = messageRecipe.slice(0, limited).join("\n");
-      for (let i = 0; i < limited; i++) {
+      const untilLine = Math.min(stopAt, messageRecipe.length);
+      let text = "";
+      for (let i = 0; i < untilLine; i++) {
+        text += messageRecipe[i];
+      }
+
+      for (let i = 0; i < builderArgs.length; i++) {
+        if (!builderArgs[i]) break;
         text = text.replaceAll(`$${i}`, builderArgs[i]);
       }
+      
       return text;
     },
   };

@@ -3,9 +3,9 @@ import { closeActiveWindow } from "./actions";
 import { showInput } from "./form";
 import { state } from "./state";
 
-export const showInputWindowListener = async () => {
+export const showInputWindowListener = async (isDevMode = false) => {
   closeActiveWindow();
-  const input = await showInput();
+  const input = await showInput(isDevMode);
   state.isInputWindowOpen = true;
   let args: string[] = [];
   let cmdAccessor = "";

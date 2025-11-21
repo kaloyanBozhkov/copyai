@@ -4,9 +4,15 @@ import {
   showInputWindowListener,
 } from "./procedures";
 
+// Detect if Electron was started via `npm start`
+const isDevMode = process.env.NODE_ENV !== "production";
+
 app.whenReady().then(() => {
   const shortcuts = [
-    globalShortcut.register("CMD+D", showInputWindowListener),
+    globalShortcut.register(
+      `CMD+D${isDevMode ? "+Shift" : ""}`,
+      () => showInputWindowListener(isDevMode)
+    ),
     globalShortcut.register("Escape", closeActiveWindowListener),
   ];
 

@@ -55,9 +55,10 @@ export const getArgs = (key: string) => {
 
   const templateStringArgCount = composer.messageRecipe
     .join("")
-    .split(/^\$[0-9]/);
+    .split(/\$[0-9]+/g);
+  const uniqueTemplateStringArgCount = new Set(templateStringArgCount).size;
 
-  return createArgsTemplate(templateStringArgCount.length);
+  return createArgsTemplate(uniqueTemplateStringArgCount);
 };
 
 const createArgsTemplate = (argsCount: number, names?: string[]) => {

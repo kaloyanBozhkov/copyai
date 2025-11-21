@@ -56,6 +56,8 @@ const plistContent = `<?xml version="1.0" encoding="UTF-8"?>
     <dict>
         <key>PATH</key>
         <string>${path.dirname(nodePath)}:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>NODE_ENV</key>
+        <string>production</string>
     </dict>
 
     <key>StandardOutPath</key>

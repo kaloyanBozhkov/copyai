@@ -4,16 +4,18 @@ import { BrowserWindow, ipcMain, app } from "electron";
 import * as path from "path";
 import { state } from "./state";
 
-export async function showInput(): Promise<string> {
+export async function showInput(isDevMode = false): Promise<string> {
   let inputWindow: BrowserWindow | null = new BrowserWindow({
-    width: 400,
-    height: 30,
+    width: 500,
+    height: 200,
     resizable: false,
     movable: true,
     alwaysOnTop: true,
     modal: true,
     show: false,
     frame: false,
+    hasShadow: false,
+    transparent: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -27,18 +29,26 @@ export async function showInput(): Promise<string> {
     }
 
     inputWindow.loadFile(path.join(__dirname, "..", "src", "form.html"));
-    const isDev =
-      process.env.ELECTRON_ENV === "development" ||
-      process.defaultApp ||
-      !app.isPackaged;
 
     // Show window when ready
     inputWindow.once("ready-to-show", () => {
-      if (isDev) {
-        inputWindow?.setTitle("Koko's Commands Box (dev)");
-      }
       inputWindow?.show();
+      inputWindow?.webContents.send("env-config", {
+        isDevMode,
+      });
     });
+
+    // Handle mouse enter/leave for click-through
+    const mouseEnterHandler = () => {
+      if (!inputWindow || inputWindow.isDestroyed()) return;
+      inputWindow.setIgnoreMouseEvents(false);
+    };
+    const mouseLeaveHandler = () => {
+      if (!inputWindow || inputWindow.isDestroyed()) return;
+      inputWindow.setIgnoreMouseEvents(true, { forward: true });
+    };
+    ipcMain.on("mouse-enter", mouseEnterHandler);
+    ipcMain.on("mouse-leave", mouseLeaveHandler);
 
     // Handle autocomplete requests
     const autocompleteHandler = (
@@ -57,10 +67,15 @@ export async function showInput(): Promise<string> {
     // Listen for value from renderer
     ipcMain.once("input-value", (_event, value) => {
       ipcMain.removeListener("autocomplete-request", autocompleteHandler);
+      ipcMain.removeListener("mouse-enter", mouseEnterHandler);
+      ipcMain.removeListener("mouse-leave", mouseLeaveHandler);
       resolve(value);
       state.activeWindowRef = null;
       inputWindow?.close();
       inputWindow = null;
     });
+
+    // Start with click-through enabled
+    inputWindow.setIgnoreMouseEvents(true, { forward: true });
   });
 }
