@@ -28,23 +28,26 @@ export async function showInput(isDevMode = false): Promise<string> {
       throw Error("Failed to create input window");
     }
 
+    let isClosing = false;
+
     inputWindow.loadFile(path.join(__dirname, "..", "src", "form.html"));
 
     // Show window when ready
     inputWindow.once("ready-to-show", () => {
-      inputWindow?.show();
-      inputWindow?.webContents.send("env-config", {
+      if (!inputWindow || inputWindow.isDestroyed() || isClosing) return;
+      inputWindow.show();
+      inputWindow.webContents.send("env-config", {
         isDevMode,
       });
     });
 
     // Handle mouse enter/leave for click-through
     const mouseEnterHandler = () => {
-      if (!inputWindow || inputWindow.isDestroyed()) return;
+      if (!inputWindow || inputWindow.isDestroyed() || isClosing) return;
       inputWindow.setIgnoreMouseEvents(false);
     };
     const mouseLeaveHandler = () => {
-      if (!inputWindow || inputWindow.isDestroyed()) return;
+      if (!inputWindow || inputWindow.isDestroyed() || isClosing) return;
       inputWindow.setIgnoreMouseEvents(true, { forward: true });
     };
     ipcMain.on("mouse-enter", mouseEnterHandler);
@@ -55,7 +58,7 @@ export async function showInput(isDevMode = false): Promise<string> {
       _event: any,
       { searchValue, isTabPress }: { searchValue: string; isTabPress: boolean }
     ) => {
-      if (!inputWindow || inputWindow.isDestroyed()) return;
+      if (!inputWindow || inputWindow.isDestroyed() || isClosing) return;
       const matchedResult = getClosestCommandKey(searchValue);
       inputWindow.webContents.send("autocomplete-result", {
         ...matchedResult,
@@ -66,13 +69,20 @@ export async function showInput(isDevMode = false): Promise<string> {
 
     // Listen for value from renderer
     ipcMain.once("input-value", (_event, value) => {
+      isClosing = true;
       ipcMain.removeListener("autocomplete-request", autocompleteHandler);
       ipcMain.removeListener("mouse-enter", mouseEnterHandler);
       ipcMain.removeListener("mouse-leave", mouseLeaveHandler);
+      
+      setImmediate(() => {
+        if (inputWindow && !inputWindow.isDestroyed()) {
+          inputWindow.close();
+        }
+        state.activeWindowRef = null;
+        inputWindow = null;
+      });
+      
       resolve(value);
-      state.activeWindowRef = null;
-      inputWindow?.close();
-      inputWindow = null;
     });
 
     // Start with click-through enabled
