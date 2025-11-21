@@ -16,7 +16,6 @@ CMD+D opens a 1 liner that enables you to run commands that copy a template to c
 - tab to fill in the auto complete
 - tab tice to clear
 - templates can be grouped by category (e.g. comments.comment_top hello world)
-- TODO: autocomplete works only for template names, not categories yet. Will add if discriminating them is really a frequent action
 
 ### next steps
 - Can have another shortcut to copy text following structued context that's been enforced by an LLM, with a UI/UX element (e.g. spinner) during any processing time.
