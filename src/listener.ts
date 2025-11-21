@@ -10,7 +10,7 @@ app.whenReady().then(() => {
     globalShortcut.register("Escape", closeActiveWindowListener),
   ];
 
-  if (!shortcuts.some((success) => !success)) {
+  if (shortcuts.some((success) => !success)) {
     console.log("Failed to register global shortcut");
   }
 });

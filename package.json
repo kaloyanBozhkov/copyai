@@ -16,5 +16,9 @@
     "@types/node": "^24.10.1",
     "electron": "^39.2.3",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "deverything": "^4.5.0",
+    "uuid": "^13.0.0"
   }
 }

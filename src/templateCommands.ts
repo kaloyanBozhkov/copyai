@@ -1,6 +1,11 @@
-import { messageBuilder, msgCategory, type MessageComposer } from "./copier";
+import { flattenObjectDot } from "./helpers";
+import {
+  messageBuilder,
+  msgCategory,
+  type MessageComposer,
+} from "./messageComposer";
 
-export const MessageComposers: Record<
+const messageComposersPerCategory: Record<
   msgCategory,
   Record<string, MessageComposer>
 > = {
@@ -30,15 +35,4 @@ export const MessageComposers: Record<
   },
 } as const;
 
-export const allCategoryCommandsNameHashTable = Object.values(
-  MessageComposers
-).reduce(
-  (acc, categoryCommands) => ({
-    ...acc,
-    ...Object.keys(categoryCommands).reduce(
-      (acc, command) => ({ ...acc, [command]: categoryCommands[command] }),
-      {}
-    ),
-  }),
-  {}
-);
+export const messageComposers = flattenObjectDot(messageComposersPerCategory);

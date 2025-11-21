@@ -1,6 +1,6 @@
 import { getClosestCommandKey } from "./autocomplete";
 // electronInput.ts
-import { BrowserWindow, ipcMain } from "electron";
+import { BrowserWindow, ipcMain, app } from "electron";
 import * as path from "path";
 import { state } from "./state";
 
@@ -29,6 +29,9 @@ export async function showInput(): Promise<string> {
 
     // Show window when ready
     inputWindow.once("ready-to-show", () => {
+      if (!app.isPackaged) {
+        inputWindow?.setTitle("Koko's Commands Box (dev)");
+      }
       inputWindow?.show();
     });
 

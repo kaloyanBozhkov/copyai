@@ -1,4 +1,4 @@
-import { copyCommand } from "./copyCommand";
+import { cmdKitchen } from "./cmdKitchen";
 import { closeActiveWindow } from "./actions";
 import { showInput } from "./form";
 import { state } from "./state";
@@ -10,7 +10,7 @@ export const showInputWindowListener = async () => {
   let args: string[] = [];
   let cmdAccessor = "";
 
-  const firstSpace = input.indexOf(" ");
+  const firstSpace = ~input.indexOf(" ") ? input.indexOf(" ") : input.length;
   if (!firstSpace) {
     cmdAccessor = input;
     args = [];
@@ -23,7 +23,7 @@ export const showInputWindowListener = async () => {
     cmdAccessor,
     cmdArgs: JSON.stringify(args),
   });
-  await copyCommand(cmdAccessor, args);
+  await cmdKitchen(cmdAccessor, args);
 };
 
 export const closeActiveWindowListener = () => {
