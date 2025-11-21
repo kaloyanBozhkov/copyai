@@ -10,7 +10,7 @@ const messageComposersPerCategory: Record<
   Record<string, MessageComposer>
 > = {
   comments: {
-    comment_frame: {
+    frame: {
       messageRecipe: [
         "/* --------------------------------",
         "/*   $0",
@@ -18,7 +18,7 @@ const messageComposersPerCategory: Record<
       ],
       ...messageBuilder(),
     },
-    comment_frame_full: {
+    full_frame: {
       messageRecipe: [
         "/* --------------------------------",
         "/*   $0",

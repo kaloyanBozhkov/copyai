@@ -9,6 +9,10 @@ export const execsPerCategory: Record<
 > = {
   generate: {
     uuid: [() => uuidv4()],
+    timestamp: [() => new Date().toISOString()],
+
+    // example named params
+    fnNamedParamsExample: [(someParams) => someParams?.[0] ?? "", "firstParamName: string[]"],
   },
 };
 

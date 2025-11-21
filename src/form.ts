@@ -7,12 +7,13 @@ import { state } from "./state";
 export async function showInput(): Promise<string> {
   let inputWindow: BrowserWindow | null = new BrowserWindow({
     width: 400,
-    height: 60,
+    height: 30,
     resizable: false,
     movable: true,
     alwaysOnTop: true,
     modal: true,
     show: false,
+    frame: false,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -26,10 +27,14 @@ export async function showInput(): Promise<string> {
     }
 
     inputWindow.loadFile(path.join(__dirname, "..", "src", "form.html"));
+    const isDev =
+      process.env.ELECTRON_ENV === "development" ||
+      process.defaultApp ||
+      !app.isPackaged;
 
     // Show window when ready
     inputWindow.once("ready-to-show", () => {
-      if (!app.isPackaged) {
+      if (isDev) {
         inputWindow?.setTitle("Koko's Commands Box (dev)");
       }
       inputWindow?.show();

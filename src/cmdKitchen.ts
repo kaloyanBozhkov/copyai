@@ -1,7 +1,5 @@
 import { clipboard } from "electron";
-import {
-  messageComposers,
-} from "./templateCommands";
+import { messageComposers } from "./templateCommands";
 import { MessageComposer } from "./messageComposer";
 import { CommandExecutor } from "./commandExecutor";
 import { execs } from "./execs";
@@ -11,12 +9,10 @@ const utensils = {
   ...messageComposers,
 };
 
-
 export const utensilsKeys = [
   ...Object.keys(messageComposers),
   ...Object.keys(execs),
 ];
-
 
 export type Recipe = MessageComposer | CommandExecutor;
 export const cmdKitchen = async <TRecipe extends Recipe>(
@@ -52,7 +48,9 @@ export const executeCmdCommand = cmdKitchen<CommandExecutor>;
 export const getArgs = (key: string) => {
   const composer = utensils[key] as Recipe;
   if (Array.isArray(composer)) {
-    return createArgsTemplate(composer.length - 1);
+    const [_fn, ...argNames] = composer;
+    const argNamesList = argNames.flat();
+    return createArgsTemplate(argNamesList.length, argNamesList);
   }
 
   const templateStringArgCount = composer.messageRecipe
@@ -62,6 +60,9 @@ export const getArgs = (key: string) => {
   return createArgsTemplate(templateStringArgCount.length);
 };
 
-const createArgsTemplate = (argsCount: number) => {
-  return Array.from({ length: argsCount }, (_, index) => `arg${index + 1}`);
+const createArgsTemplate = (argsCount: number, names?: string[]) => {
+  return Array.from(
+    { length: argsCount },
+    (_, index) => names?.[index] ?? `arg${index + 1}`
+  );
 };
