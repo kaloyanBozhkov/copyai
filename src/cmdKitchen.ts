@@ -39,8 +39,10 @@ export const cmdKitchen = async <TRecipe extends Recipe>(
   const message = Array.isArray(recipe)
     ? recipe[0](builderArgs)
     : recipe!.build(builderArgs);
-  clipboard.writeText(message);
-  console.info("Copied:\n", message);
+  if (typeof message === "string") {
+    clipboard.writeText(message);
+    console.info("Copied:\n", message);
+  }
 };
 
 export const copyCommand = cmdKitchen<MessageComposer>;

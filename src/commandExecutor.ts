@@ -1,2 +1,5 @@
 type Args = string[];
-export type CommandExecutor = [(builderArgs?: Args) => string, ...Args];
+export type CommandExecutor = [
+  (builderArgs?: Args) => string | void,
+  ...Args
+];

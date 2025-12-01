@@ -1,7 +1,7 @@
 import { CommandExecutor } from "./commandExecutor";
 import { flattenObjectDot } from "./helpers";
-import { v4 as uuidv4 } from 'uuid';
-
+import { v4 as uuidv4 } from "uuid";
+import { exec } from "child_process";
 
 export const execsPerCategory: Record<
   string,
@@ -12,7 +12,20 @@ export const execsPerCategory: Record<
     timestamp: [() => new Date().toISOString()],
 
     // example named params
-    fnNamedParamsExample: [(someParams) => someParams?.[0] ?? "", "firstParamName: string[]"],
+    fnNamedParamsExample: [
+      (someParams) => someParams?.[0] ?? "",
+      "firstParamName: string[]",
+    ],
+  },
+  cmd: {
+    kill: [
+      (args?: string[]) => {
+        const port = args?.[0] ?? "3000";
+        if (!port) return;
+        exec(`kill -9 $(lsof -t -i:${port})`);
+      },
+      "port: string",
+    ],
   },
 };
 
