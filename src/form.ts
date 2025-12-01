@@ -16,6 +16,7 @@ export async function showInput(isDevMode = false): Promise<string> {
     frame: false,
     hasShadow: false,
     transparent: true,
+    skipTaskbar: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,

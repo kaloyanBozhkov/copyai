@@ -9,9 +9,8 @@ const isDevMode = process.env.NODE_ENV !== "production";
 
 app.whenReady().then(() => {
   const shortcuts = [
-    globalShortcut.register(
-      `CMD+D${isDevMode ? "+Shift" : ""}`,
-      () => showInputWindowListener(isDevMode)
+    globalShortcut.register(`CMD+D${isDevMode ? "+Shift" : ""}`, () =>
+      showInputWindowListener(isDevMode)
     ),
     globalShortcut.register("Escape", closeActiveWindowListener),
   ];
@@ -28,3 +27,7 @@ app.on("window-all-closed", () => {
 
 // Clean up on quit
 app.on("will-quit", () => {});
+
+if (process.platform === "darwin") {
+  app.dock?.hide();
+}
