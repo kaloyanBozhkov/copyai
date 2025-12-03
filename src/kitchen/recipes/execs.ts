@@ -8,6 +8,10 @@ import z from "zod";
 import { retry } from "@koko420/shared";
 import { getEmailReplySystemMessage } from "../../ai/emails";
 import { summarizeTextSystemMessage } from "../../ai/summaries";
+import {
+  JavaScriptSystemMessage,
+  TypeScriptSystemMessage,
+} from "../../ai/code";
 
 export const execsPerCategory: Record<
   string,
@@ -114,13 +118,85 @@ export const execsPerCategory: Record<
       "text: string",
     ],
   },
+  code: {
+    js: [
+      async (args?: string[]) => {
+        const specification = args?.[0] ?? "";
+        if (!specification) return "no specification provided";
+
+        const result = await retry(
+          () => {
+            return getLLMResponse({
+              systemMessage: JavaScriptSystemMessage,
+              userMessage: specification,
+              schema: z.object({
+                code: z.string(),
+              }),
+            });
+          },
+          3,
+          false
+        );
+
+        return result.code;
+      },
+      "specification: string",
+    ],
+    ts: [
+      async (args?: string[]) => {
+        const specification = args?.[0] ?? "";
+        if (!specification) return "no specification provided";
+
+        const result = await retry(
+          () => {
+            return getLLMResponse({
+              systemMessage: TypeScriptSystemMessage,
+              userMessage: specification,
+              schema: z.object({
+                code: z.string(),
+              }),
+            });
+          },
+          3,
+          false
+        );
+
+        return result.code;
+      },
+      "specification: string",
+    ],
+  },
   translate: {
     // populated by setupLanguageTranslationCommands
   },
 };
 
 const setupLanguageTranslationCommands = () => {
-  const LANGUAGES = ["italian", "bulgarian", "spanish", "english"];
+  const LANGUAGES = [
+    "italian",
+    "bulgarian",
+    "spanish",
+    "english",
+    "german",
+    "french",
+    "portuguese",
+    "russian",
+    "chinese",
+    "japanese",
+    "korean",
+    "arabic",
+    "hindi",
+    "bengali",
+    "turkish",
+    "indonesian",
+    "malay",
+    "thai",
+    "vietnamese",
+    "filipino",
+    "malaysian",
+    "singaporean",
+    "taiwanese",
+  ];
   const curryExec = (language: string) => async (args?: string[]) => {
     const text = args?.[0] ?? "";
     return execsPerCategory.ai.translate[0]([language + " " + text]);
