@@ -32,7 +32,9 @@ CMD+D+Shift
 - templates can be grouped by category (e.g. comments.comment_top hello world)
 - can run node commands (e.g. uuid, etc..)
 
-### Next steps
+### why npm and not pnpm for electron app?
+... https://github.com/electron/forge/pull/3209
 
-- Can have another shortcut to copy text following structued context that's been enforced by an LLM, with a UI/UX element (e.g. spinner) during any processing time.
-- For the above, add a sound on copy done
+
+### Prod logs?
+~/copyai/debug.log

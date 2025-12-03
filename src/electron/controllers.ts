@@ -1,12 +1,12 @@
-import { cmdKitchen } from "./cmdKitchen";
+import { cmdKitchen } from "../kitchen/cmdKitchen";
 import { closeActiveWindow } from "./actions";
-import { showInput } from "./form";
-import { state } from "./state";
+import { showCommandAutocompleteInput } from "../views/commandAutocompleteInput";
+import { showProcessingCommandView } from "../views/processingCommand";
 
 export const showInputWindowListener = async (isDevMode = false) => {
   closeActiveWindow();
-  const input = await showInput(isDevMode);
-  state.isInputWindowOpen = true;
+  const input = await showCommandAutocompleteInput(isDevMode);
+  if (!input) return;
   let args: string[] = [];
   let cmdAccessor = "";
 
@@ -23,7 +23,10 @@ export const showInputWindowListener = async (isDevMode = false) => {
     cmdAccessor,
     cmdArgs: JSON.stringify(args),
   });
+
+  const onCompletedProcessing = await showProcessingCommandView();
   await cmdKitchen(cmdAccessor, args);
+  onCompletedProcessing();
 };
 
 export const closeActiveWindowListener = () => {

@@ -1,3 +1,5 @@
-#!/usr/bin/env node
-import "./listener";
+import { join } from "path";
+import * as dotenv from "dotenv";
+dotenv.config({ path: join(__dirname, "..", ".env") });
 
+import "./app";

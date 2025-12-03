@@ -1,8 +1,8 @@
 import { clipboard } from "electron";
-import { messageComposers } from "./templateCommands";
+import { messageComposers } from "./recipes/templateCommands";
 import { MessageComposer } from "./messageComposer";
 import { CommandExecutor } from "./commandExecutor";
-import { execs } from "./execs";
+import { execs } from "./recipes/execs";
 import { countUniqueArgs } from "./helpers";
 
 const utensils = {
@@ -33,12 +33,13 @@ export const cmdKitchen = async <TRecipe extends Recipe>(
     recipe = utensils[categoryKey] as TRecipe;
   }
   if (!recipe) {
-    throw Error(`Unknown command: ${categoryKey} ${commandKey}`);
+    console.info(`Unknown command: ${categoryKey} ${commandKey}`);
+    return;
   }
 
-  const message = Array.isArray(recipe)
+  const message = await (Array.isArray(recipe)
     ? recipe[0](builderArgs)
-    : recipe!.build(builderArgs);
+    : recipe!.build(builderArgs));
   if (typeof message === "string") {
     clipboard.writeText(message);
     console.info("Copied:\n", message);
@@ -51,7 +52,7 @@ export const executeCmdCommand = cmdKitchen<CommandExecutor>;
 export const getArgs = (key: string) => {
   const composer = utensils[key] as Recipe;
   if (Array.isArray(composer)) {
-    const [_fn, ...argNames] = composer;
+    const [, ...argNames] = composer;
     const argNamesList = argNames.flat();
     return createArgsTemplate(argNamesList.length, argNamesList);
   }

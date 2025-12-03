@@ -5,20 +5,49 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "tsc && electron .",
-    "postinstall": "tsc && node scripts/setup-autostart.js"
+    "build:app": "cd src/app && pnpm run build",
+    "build:all": "pnpm run build && pnpm run build:app",
+    "dev": "concurrently \"pnpm dev:app\" \"pnpm dev:electron\"",
+    "dev:app": "cd src/app && pnpm run dev",
+    "dev:electron": "tsc -w & electronmon .",
+    "postinstall": "pnpm build:app && npm run build",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "package": "npm run build:all && electron-forge package",
+    "make": "npm run build:all && electron-forge make"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@10.22.0",
   "devDependencies": {
+    "@electron-forge/cli": "^7.10.2",
+    "@electron-forge/maker-deb": "^7.10.2",
+    "@electron-forge/maker-dmg": "^7.10.2",
+    "@electron-forge/maker-rpm": "^7.10.2",
+    "@electron-forge/maker-squirrel": "^7.10.2",
+    "@electron-forge/maker-zip": "^7.10.2",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.10.2",
+    "@electron-forge/plugin-fuses": "^7.10.2",
+    "@electron/fuses": "^1.8.0",
+    "@eslint/js": "^9.39.1",
+    "@types/auto-launch": "^5.0.5",
     "@types/node": "^24.10.1",
-    "electron": "^39.2.3",
-    "typescript": "^5.9.3"
+    "concurrently": "^9.1.0",
+    "electron": "^39.2.4",
+    "electronmon": "^2.0.3",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.1"
   },
   "dependencies": {
+    "@koko420/ai-tools": "^1.0.7",
+    "@koko420/shared": "^1.0.3",
+    "auto-launch": "^5.0.6",
     "deverything": "^4.5.0",
-    "uuid": "^13.0.0"
+    "dotenv": "^17.2.3",
+    "electron-squirrel-startup": "^1.0.1",
+    "uuid": "^13.0.0",
+    "zod": "^4.1.13"
   }
 }

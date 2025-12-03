@@ -1,9 +1,9 @@
-import { flattenObjectDot } from "./helpers";
+import { flattenObjectDot } from "../helpers";
 import {
   messageBuilder,
   msgCategory,
   type MessageComposer,
-} from "./messageComposer";
+} from "../messageComposer";
 
 const commonIngredients = {
   schemaRules: `<schema_rules>

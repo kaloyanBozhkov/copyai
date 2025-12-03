@@ -1,46 +1,29 @@
-import { getClosestCommandKey } from "./autocomplete";
-// electronInput.ts
-import { BrowserWindow, ipcMain, app } from "electron";
-import * as path from "path";
-import { state } from "./state";
+import { getClosestCommandKey } from "../kitchen/autocomplete";
+import { BrowserWindow, ipcMain } from "electron";
+import { state } from "../electron/state";
+import { browserWindowOptions, initActiveWindow } from "./common";
+import { sendToActiveWindow } from "../electron/actions";
 
-export async function showInput(isDevMode = false): Promise<string> {
-  let inputWindow: BrowserWindow | null = new BrowserWindow({
+export async function showCommandAutocompleteInput(
+  isDevMode = false
+): Promise<string> {
+  const inputWindow = new BrowserWindow({
+    ...browserWindowOptions,
     width: 500,
     height: 200,
-    resizable: false,
-    movable: true,
-    alwaysOnTop: true,
-    modal: true,
-    show: false,
-    frame: false,
-    hasShadow: false,
-    transparent: true,
-    skipTaskbar: true,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+  });
+
+  await initActiveWindow({
+    window: inputWindow,
+    config: {
+      route: "command-input",
+      isDevMode,
     },
   });
-  state.activeWindowRef = inputWindow;
 
+  // wait for user command + arg input and resolve with user input
   return new Promise((resolve) => {
-    if (!inputWindow) {
-      throw Error("Failed to create input window");
-    }
-
     let isClosing = false;
-
-    inputWindow.loadFile(path.join(__dirname, "..", "src", "form.html"));
-
-    // Show window when ready
-    inputWindow.once("ready-to-show", () => {
-      if (!inputWindow || inputWindow.isDestroyed() || isClosing) return;
-      inputWindow.show();
-      inputWindow.webContents.send("env-config", {
-        isDevMode,
-      });
-    });
 
     // Handle mouse enter/leave for click-through
     const mouseEnterHandler = () => {
@@ -56,12 +39,12 @@ export async function showInput(isDevMode = false): Promise<string> {
 
     // Handle autocomplete requests
     const autocompleteHandler = (
-      _event: any,
+      _event: Electron.IpcMainEvent,
       { searchValue, isTabPress }: { searchValue: string; isTabPress: boolean }
     ) => {
       if (!inputWindow || inputWindow.isDestroyed() || isClosing) return;
       const matchedResult = getClosestCommandKey(searchValue);
-      inputWindow.webContents.send("autocomplete-result", {
+      sendToActiveWindow("autocomplete-result", {
         ...matchedResult,
         isTabPress,
       });
@@ -74,16 +57,17 @@ export async function showInput(isDevMode = false): Promise<string> {
       ipcMain.removeListener("autocomplete-request", autocompleteHandler);
       ipcMain.removeListener("mouse-enter", mouseEnterHandler);
       ipcMain.removeListener("mouse-leave", mouseLeaveHandler);
-      
-      setImmediate(() => {
-        if (inputWindow && !inputWindow.isDestroyed()) {
-          inputWindow.close();
-        }
+
+      if (inputWindow && !inputWindow.isDestroyed()) {
+        inputWindow.once("closed", () => {
+          state.activeWindowRef = null;
+          resolve(value);
+        });
+        inputWindow.close();
+      } else {
         state.activeWindowRef = null;
-        inputWindow = null;
-      });
-      
-      resolve(value);
+        resolve(value);
+      }
     });
 
     // Start with click-through enabled
