@@ -3,18 +3,16 @@ import { log } from "./logError";
 
 export const autoLauncher = {
   isEnabled: () => {
-    const settings = app.getLoginItemSettings({
-      path: app.getPath("exe"),
-    });
+    const settings = app.getLoginItemSettings();
     return settings.openAtLogin;
   },
   enable: () => {
-    app.setLoginItemSettings({ openAtLogin: true, path: app.getPath("exe") });
+    app.setLoginItemSettings({ openAtLogin: true });
     log("Auto-launch enabled");
     log("Settings: ", getAutoLaunchEnabled());
   },
   disable: () => {
-    app.setLoginItemSettings({ openAtLogin: false, path: app.getPath("exe") });
+    app.setLoginItemSettings({ openAtLogin: false });
     log("Auto-launch disabled");
   },
 };

@@ -6,12 +6,24 @@ import { getLLMResponse } from "@koko420/ai-tools";
 import { getTranslationSystemMessage } from "../../ai/translations";
 import z from "zod";
 import { retry } from "@koko420/shared";
-import { getEmailReplySystemMessage } from "../../ai/emails";
+import {
+  getCoverLetterSystemMessage,
+  getEmailReplySystemMessage,
+  getJobQuestionAnswerSystemMessage,
+  getLinkedinReplySystemMessage,
+} from "../../ai/replies";
 import { summarizeTextSystemMessage } from "../../ai/summaries";
 import {
+  CommandSystemMessage,
   JavaScriptSystemMessage,
   TypeScriptSystemMessage,
 } from "../../ai/code";
+import { getPiratebaySearchLink } from "../../helpers/getLinks";
+import { getPageHTML, getPageHTMLWithJS } from "../../helpers/getPageHtml";
+import { parse } from "node-html-parser";
+import { getMovieSystemMessage } from "../../ai/commands";
+import path from "path";
+import os from "os";
 
 export const execsPerCategory: Record<
   string,
@@ -118,6 +130,32 @@ export const execsPerCategory: Record<
       "text: string",
     ],
   },
+  reply: {
+    linkedin: [
+      async (args?: string[]) => {
+        if (!args || !args[0]) return "no message provided";
+        const message = args.join(" ");
+        if (!message) return "no message provided";
+
+        const result = await retry(
+          async () => {
+            return getLLMResponse({
+              systemMessage: await getLinkedinReplySystemMessage(),
+              userMessage: message,
+              schema: z.object({
+                reply: z.string(),
+              }),
+            });
+          },
+          3,
+          false
+        );
+
+        return result.reply;
+      },
+      "message: string",
+    ],
+  },
   code: {
     js: [
       async (args?: string[]) => {
@@ -165,9 +203,199 @@ export const execsPerCategory: Record<
       },
       "specification: string",
     ],
+    cmd: [
+      async (args?: string[]) => {
+        if (!args || !args[0]) return "no command descriotor provided";
+        const commandDescription = args.join(" ");
+        if (!commandDescription) return "no command descriptor provided";
+        const result = await retry(
+          async () => {
+            return getLLMResponse({
+              systemMessage: CommandSystemMessage,
+              userMessage: commandDescription,
+              schema: z.object({
+                command: z.string(),
+              }),
+            });
+          },
+          3,
+          false
+        );
+
+        return result.command;
+      },
+      "command descriptor: string",
+    ],
   },
   translate: {
     // populated by setupLanguageTranslationCommands
+  },
+  job_hunt: {
+    cover_letter: [
+      async (args?: string[]) => {
+        if (!args || !args[0]) return "no job description provided";
+        const jobDescription = args.join(" ");
+        if (!jobDescription) return "no job description provided";
+
+        const result = await retry(
+          async () => {
+            return getLLMResponse({
+              systemMessage: await getCoverLetterSystemMessage(),
+              userMessage: jobDescription,
+              schema: z.object({
+                cover_letter: z.string(),
+              }),
+            });
+          },
+          3,
+          false
+        );
+
+        return result.cover_letter;
+      },
+      "job description: string",
+    ],
+    role_question: [
+      async (args?: string[]) => {
+        if (!args || !args[0]) return "no question provided";
+        const question = args.join(" ");
+        if (!question) return "no question provided";
+
+        const result = await retry(
+          async () => {
+            return getLLMResponse({
+              systemMessage: await getJobQuestionAnswerSystemMessage(),
+              userMessage: question,
+              schema: z.object({
+                role_question: z.string(),
+              }),
+            });
+          },
+          3,
+          false
+        );
+
+        return result.role_question;
+      },
+      "question: string",
+    ],
+  },
+  pirate: {
+    movie: [
+      async (args?: string[]) => {
+        if (!args || !args[0]) return "no movie title provided";
+        const text = args.join(" ");
+        if (!text) return "no movie title provided";
+
+        const link = await getPiratebaySearchLink(text);
+        const {
+          elementsHTML: selectedItemsElementsHTML,
+          text: selectedItemsHTML,
+        } = await getPageHTMLWithJS({
+          url: link,
+          selector: "ol li",
+          limit: 10, // 10 <li>'s
+          skip: 1, // skip from the Nth <li>
+          returnOuterHTML: true,
+        });
+
+        if (selectedItemsHTML.length === 0) {
+          return "No torrents found for this movie";
+        }
+
+        const { index } = await retry(
+          async () => {
+            return getLLMResponse({
+              systemMessage: await getMovieSystemMessage(selectedItemsHTML),
+              userMessage: text,
+              schema: z.object({
+                index: z.number(),
+              }),
+            });
+          },
+          3,
+          false
+        );
+
+        const selectedItem = selectedItemsElementsHTML[index];
+        if (!selectedItem) {
+          return `Invalid index ${index} returned. Available items: ${selectedItemsElementsHTML.length}`;
+        }
+        console.log("selectedItem", selectedItem.outerHTML);
+
+        const magnetLink = parse(selectedItem).querySelector('a[href^="magnet:?"]');
+        if (!magnetLink) return "no magnet link found";
+        const magnetLinkUrl = magnetLink.getAttribute("href");
+        if (!magnetLinkUrl) return "no magnet link URL found";
+
+        // download the torrent (non-blocking)
+        const downloadPath = path.join(os.homedir(), "Downloads", "movies");
+
+        // Dynamic import for ESM module (using eval to prevent TS from compiling to require)
+        (eval('import("webtorrent")') as Promise<any>)
+          .then((WebTorrentModule) => {
+            const WebTorrent = WebTorrentModule.default;
+            const client = new WebTorrent();
+
+            client.add(
+              magnetLinkUrl,
+              { path: downloadPath },
+              (torrent: any) => {
+                console.log(`Starting download: ${torrent.name}`);
+
+                // Find the largest file (the movie file)
+                const movieFile = torrent.files.reduce(
+                  (largest: any, file: any) =>
+                    file.length > largest.length ? file : largest
+                );
+
+                // Deselect all files first
+                torrent.files.forEach((file: any) => file.deselect());
+
+                // Select only the movie file
+                movieFile.select();
+
+                const movieFolderPath = path.join(downloadPath, torrent.name);
+
+                torrent.on("done", () => {
+                  console.log(`Download complete: ${movieFile.name}`);
+                  // Open Finder at the movie folder when done
+                  exec(`open "${movieFolderPath}"`, (error) => {
+                    if (error) {
+                      console.error("Error opening Finder:", error);
+                    }
+                    client.destroy();
+                  });
+                });
+
+                // Show progress
+                const progressInterval = setInterval(() => {
+                  console.log(
+                    `Progress: ${(torrent.progress * 100).toFixed(1)}%`
+                  );
+                  console.log(
+                    `Download speed: ${(torrent.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s`
+                  );
+                  console.log(`Peers: ${torrent.numPeers}`);
+
+                  if (torrent.done) {
+                    clearInterval(progressInterval);
+                  }
+                }, 5000);
+              }
+            );
+          })
+          .catch((error) => {
+            console.error("Error loading webtorrent:", error);
+          });
+
+        // Open Finder at downloads folder immediately
+        exec(`open "${downloadPath}"`);
+
+        return `Download started for: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
+      },
+      "title: string, year?: number",
+    ],
   },
 };
 

@@ -1,0 +1,1 @@
+export const getPiratebaySearchLink = async (search: string) => `https://thepiratebay.org/search.php?q=${search.split(' ').join('+')}+2&cat=0`
