@@ -19,11 +19,13 @@ import {
   TypeScriptSystemMessage,
 } from "../../ai/code";
 import { getPiratebaySearchLink } from "../../helpers/getLinks";
-import { getPageHTML, getPageHTMLWithJS } from "../../helpers/getPageHtml";
+import { getPageHTMLWithJS } from "../../helpers/getPageHtml";
 import { parse } from "node-html-parser";
 import { getMovieSystemMessage } from "../../ai/commands";
 import path from "path";
 import os from "os";
+import { downloadMovie } from "../../helpers/webtorrent/downloadMovie";
+import { streamMovie } from "../../helpers/webtorrent/streamMovie";
 
 export const execsPerCategory: Record<
   string,
@@ -323,7 +325,9 @@ export const execsPerCategory: Record<
         }
         console.log("selectedItem", selectedItem.outerHTML);
 
-        const magnetLink = parse(selectedItem).querySelector('a[href^="magnet:?"]');
+        const magnetLink = parse(selectedItem).querySelector(
+          'a[href^="magnet:?"]'
+        );
         if (!magnetLink) return "no magnet link found";
         const magnetLinkUrl = magnetLink.getAttribute("href");
         if (!magnetLinkUrl) return "no magnet link URL found";
@@ -331,63 +335,7 @@ export const execsPerCategory: Record<
         // download the torrent (non-blocking)
         const downloadPath = path.join(os.homedir(), "Downloads", "movies");
 
-        // Dynamic import for ESM module (using eval to prevent TS from compiling to require)
-        (eval('import("webtorrent")') as Promise<any>)
-          .then((WebTorrentModule) => {
-            const WebTorrent = WebTorrentModule.default;
-            const client = new WebTorrent();
-
-            client.add(
-              magnetLinkUrl,
-              { path: downloadPath },
-              (torrent: any) => {
-                console.log(`Starting download: ${torrent.name}`);
-
-                // Find the largest file (the movie file)
-                const movieFile = torrent.files.reduce(
-                  (largest: any, file: any) =>
-                    file.length > largest.length ? file : largest
-                );
-
-                // Deselect all files first
-                torrent.files.forEach((file: any) => file.deselect());
-
-                // Select only the movie file
-                movieFile.select();
-
-                const movieFolderPath = path.join(downloadPath, torrent.name);
-
-                torrent.on("done", () => {
-                  console.log(`Download complete: ${movieFile.name}`);
-                  // Open Finder at the movie folder when done
-                  exec(`open "${movieFolderPath}"`, (error) => {
-                    if (error) {
-                      console.error("Error opening Finder:", error);
-                    }
-                    client.destroy();
-                  });
-                });
-
-                // Show progress
-                const progressInterval = setInterval(() => {
-                  console.log(
-                    `Progress: ${(torrent.progress * 100).toFixed(1)}%`
-                  );
-                  console.log(
-                    `Download speed: ${(torrent.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s`
-                  );
-                  console.log(`Peers: ${torrent.numPeers}`);
-
-                  if (torrent.done) {
-                    clearInterval(progressInterval);
-                  }
-                }, 5000);
-              }
-            );
-          })
-          .catch((error) => {
-            console.error("Error loading webtorrent:", error);
-          });
+        downloadMovie({ magnetLinkUrl, downloadPath });
 
         // Open Finder at downloads folder immediately
         exec(`open "${downloadPath}"`);
@@ -395,6 +343,70 @@ export const execsPerCategory: Record<
         return `Download started for: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
       },
       "title: string, year?: number",
+    ],
+    stream: [
+      async (args?: string[]) => {
+        if (!args || !args[0]) return "no movie title provided";
+        
+        // Check for airplay flag
+        const hasAirplayFlag = args.some(arg => arg.toLowerCase() === "--airplay" || arg.toLowerCase() === "-a");
+        const text = args.filter(arg => !arg.startsWith("-")).join(" ");
+        
+        if (!text) return "no movie title provided";
+
+        const link = await getPiratebaySearchLink(text);
+        const {
+          elementsHTML: selectedItemsElementsHTML,
+          text: selectedItemsHTML,
+        } = await getPageHTMLWithJS({
+          url: link,
+          selector: "ol li",
+          limit: 10,
+          skip: 1,
+          returnOuterHTML: true,
+        });
+
+        if (selectedItemsHTML.length === 0) {
+          return "No torrents found for this movie";
+        }
+
+        const { index } = await retry(
+          async () => {
+            return getLLMResponse({
+              systemMessage: await getMovieSystemMessage(selectedItemsHTML),
+              userMessage: text,
+              schema: z.object({
+                index: z.number(),
+              }),
+            });
+          },
+          3,
+          false
+        );
+
+        const selectedItem = selectedItemsElementsHTML[index];
+        if (!selectedItem) {
+          return `Invalid index ${index} returned. Available items: ${selectedItemsElementsHTML.length}`;
+        }
+
+        const magnetLink = parse(selectedItem).querySelector(
+          'a[href^="magnet:?"]'
+        );
+        if (!magnetLink) return "no magnet link found";
+        const magnetLinkUrl = magnetLink.getAttribute("href");
+        if (!magnetLinkUrl) return "no magnet link URL found";
+
+        // stream the torrent (non-blocking)
+        const downloadPath = path.join(os.homedir(), "Downloads", "movies");
+
+        streamMovie({ magnetLinkUrl, downloadPath, airplay: hasAirplayFlag });
+
+        // Open Finder at downloads folder immediately
+        exec(`open "${downloadPath}"`);
+
+        return `Stream started${hasAirplayFlag ? " (AirPlay)" : ""}: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
+      },
+      "title: string, --airplay?: flag",
     ],
   },
 };
