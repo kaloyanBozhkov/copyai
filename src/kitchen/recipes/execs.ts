@@ -18,10 +18,16 @@ import {
   JavaScriptSystemMessage,
   TypeScriptSystemMessage,
 } from "../../ai/code";
-import { getPiratebaySearchLink } from "../../helpers/getLinks";
+import {
+  getAnimeSearchLink,
+  getPiratebaySearchLink,
+} from "../../helpers/getLinks";
 import { getPageHTMLWithJS } from "../../helpers/getPageHtml";
 import { parse } from "node-html-parser";
-import { getMovieSystemMessage } from "../../ai/commands";
+import {
+  getAnimeSystemMessage,
+  getMovieSystemMessage,
+} from "../../ai/commands";
 import path from "path";
 import os from "os";
 import { downloadMovie } from "../../helpers/webtorrent/downloadMovie";
@@ -282,8 +288,8 @@ export const execsPerCategory: Record<
       "question: string",
     ],
   },
-  pirate: {
-    movie: [
+  movie: {
+    download: [
       async (args?: string[]) => {
         if (!args || !args[0]) return "no movie title provided";
         const text = args.join(" ");
@@ -347,11 +353,13 @@ export const execsPerCategory: Record<
     stream: [
       async (args?: string[]) => {
         if (!args || !args[0]) return "no movie title provided";
-        
+
         // Check for airplay flag
-        const hasAirplayFlag = args.some(arg => arg.toLowerCase() === "--airplay" || arg.toLowerCase() === "-a");
-        const text = args.filter(arg => !arg.startsWith("-")).join(" ");
-        
+        const hasAirplayFlag = args.some((arg) =>
+          arg.toLowerCase().includes("--airplay")
+        );
+        const text = args.filter((arg) => !arg.startsWith("-")).join(" ");
+
         if (!text) return "no movie title provided";
 
         const link = await getPiratebaySearchLink(text);
@@ -398,6 +406,138 @@ export const execsPerCategory: Record<
 
         // stream the torrent (non-blocking)
         const downloadPath = path.join(os.homedir(), "Downloads", "movies");
+
+        streamMovie({ magnetLinkUrl, downloadPath, airplay: hasAirplayFlag });
+
+        // Open Finder at downloads folder immediately
+        exec(`open "${downloadPath}"`);
+
+        return `Stream started${hasAirplayFlag ? " (AirPlay)" : ""}: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
+      },
+      "title: string, --airplay?: flag",
+    ],
+  },
+  anime: {
+    download: [
+      async (args?: string[]) => {
+        if (!args || !args[0]) return "no anime title provided";
+        const text = args.join(" ");
+        if (!text) return "no anime title provided";
+
+        const link = await getAnimeSearchLink(text);
+        const {
+          elementsHTML: selectedItemsElementsHTML,
+          text: selectedItemsHTML,
+        } = await getPageHTMLWithJS({
+          url: link,
+          selector: "tbody tr",
+          limit: 10, // 10 <li>'s
+          skip: 1, // skip from the Nth <li>
+          returnOuterHTML: true,
+        });
+
+        if (selectedItemsHTML.length === 0) {
+          return "No torrents found for this movie";
+        }
+
+        const { index } = await retry(
+          async () => {
+            return getLLMResponse({
+              systemMessage: await getAnimeSystemMessage(selectedItemsHTML),
+              userMessage: text,
+              schema: z.object({
+                index: z.number(),
+              }),
+            });
+          },
+          3,
+          false
+        );
+
+        const selectedItem = selectedItemsElementsHTML[index];
+        if (!selectedItem) {
+          return `Invalid index ${index} returned. Available items: ${selectedItemsElementsHTML.length}`;
+        }
+        console.log("selectedItem", selectedItem.outerHTML);
+
+        const magnetLink = parse(selectedItem).querySelector(
+          'a[href^="magnet:?"]'
+        );
+        if (!magnetLink) return "no magnet link found";
+        const magnetLinkUrl = magnetLink.getAttribute("href");
+        if (!magnetLinkUrl) return "no magnet link URL found";
+
+        // download the torrent (non-blocking)
+        const downloadPath = path.join(os.homedir(), "Downloads", "movies");
+
+        downloadMovie({ magnetLinkUrl, downloadPath });
+
+        // Open Finder at downloads folder immediately
+        exec(`open "${downloadPath}"`);
+
+        return `Download started for: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
+      },
+      "title: string, S_E_: string",
+    ],
+    stream: [
+      async (args?: string[]) => {
+        if (!args || !args[0]) return "no anime title provided";
+
+        // Check for airplay flag
+        const hasAirplayFlag = args.some((arg) =>
+          arg.toLowerCase().includes("--airplay")
+        );
+        const text = args.filter((arg) => !arg.startsWith("-")).join(" ");
+
+        if (!text) return "no anime title provided";
+
+        console.log("hasAirplayFlag", hasAirplayFlag);
+
+        const searchQuery = text.split(" --airplay")[0];
+        const link = await getAnimeSearchLink(searchQuery);
+        const {
+          elementsHTML: selectedItemsElementsHTML,
+          text: selectedItemsHTML,
+        } = await getPageHTMLWithJS({
+          url: link,
+          selector: "tbody tr",
+          limit: 10,
+          skip: 1,
+          returnOuterHTML: true,
+        });
+
+        if (selectedItemsHTML.length === 0) {
+          return "No torrents found for this anime";
+        }
+
+        const { index } = await retry(
+          async () => {
+            return getLLMResponse({
+              systemMessage: await getAnimeSystemMessage(selectedItemsHTML),
+              userMessage: searchQuery,
+              schema: z.object({
+                index: z.number(),
+              }),
+            });
+          },
+          3,
+          false
+        );
+
+        const selectedItem = selectedItemsElementsHTML[index];
+        if (!selectedItem) {
+          return `Invalid index ${index} returned. Available items: ${selectedItemsElementsHTML.length}`;
+        }
+
+        const magnetLink = parse(selectedItem).querySelector(
+          'a[href^="magnet:?"]'
+        );
+        if (!magnetLink) return "no magnet link found";
+        const magnetLinkUrl = magnetLink.getAttribute("href");
+        if (!magnetLinkUrl) return "no magnet link URL found";
+
+        // stream the torrent (non-blocking)
+        const downloadPath = path.join(os.homedir(), "Downloads", "anime");
 
         streamMovie({ magnetLinkUrl, downloadPath, airplay: hasAirplayFlag });
 
