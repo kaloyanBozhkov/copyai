@@ -353,13 +353,7 @@ export const execsPerCategory: Record<
     stream: [
       async (args?: string[]) => {
         if (!args || !args[0]) return "no movie title provided";
-
-        // Check for airplay flag
-        const hasAirplayFlag = args.some((arg) =>
-          arg.toLowerCase().includes("--airplay")
-        );
-        const text = args.filter((arg) => !arg.startsWith("-")).join(" ");
-
+        const text = args.join(" ");
         if (!text) return "no movie title provided";
 
         const link = await getPiratebaySearchLink(text);
@@ -407,14 +401,11 @@ export const execsPerCategory: Record<
         // stream the torrent (non-blocking)
         const downloadPath = path.join(os.homedir(), "Downloads", "movies");
 
-        streamMovie({ magnetLinkUrl, downloadPath, airplay: hasAirplayFlag });
+        streamMovie({ magnetLinkUrl, downloadPath });
 
-        // Open Finder at downloads folder immediately
-        exec(`open "${downloadPath}"`);
-
-        return `Stream started${hasAirplayFlag ? " (AirPlay)" : ""}: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
+        return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
       },
-      "title: string, --airplay?: flag",
+      "title: string",
     ],
   },
   anime: {
@@ -482,19 +473,10 @@ export const execsPerCategory: Record<
     stream: [
       async (args?: string[]) => {
         if (!args || !args[0]) return "no anime title provided";
-
-        // Check for airplay flag
-        const hasAirplayFlag = args.some((arg) =>
-          arg.toLowerCase().includes("--airplay")
-        );
-        const text = args.filter((arg) => !arg.startsWith("-")).join(" ");
-
+        const text = args.join(" ");
         if (!text) return "no anime title provided";
 
-        console.log("hasAirplayFlag", hasAirplayFlag);
-
-        const searchQuery = text.split(" --airplay")[0];
-        const link = await getAnimeSearchLink(searchQuery);
+        const link = await getAnimeSearchLink(text);
         const {
           elementsHTML: selectedItemsElementsHTML,
           text: selectedItemsHTML,
@@ -514,7 +496,7 @@ export const execsPerCategory: Record<
           async () => {
             return getLLMResponse({
               systemMessage: await getAnimeSystemMessage(selectedItemsHTML),
-              userMessage: searchQuery,
+              userMessage: text,
               schema: z.object({
                 index: z.number(),
               }),
@@ -539,14 +521,11 @@ export const execsPerCategory: Record<
         // stream the torrent (non-blocking)
         const downloadPath = path.join(os.homedir(), "Downloads", "anime");
 
-        streamMovie({ magnetLinkUrl, downloadPath, airplay: hasAirplayFlag });
+        streamMovie({ magnetLinkUrl, downloadPath });
 
-        // Open Finder at downloads folder immediately
-        exec(`open "${downloadPath}"`);
-
-        return `Stream started${hasAirplayFlag ? " (AirPlay)" : ""}: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
+        return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
       },
-      "title: string, --airplay?: flag",
+      "title: string",
     ],
   },
 };

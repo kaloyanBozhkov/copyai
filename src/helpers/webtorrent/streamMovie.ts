@@ -43,9 +43,12 @@ export const streamProcessUI = {
     }
     return false;
   },
-  onTerminate: (process: StreamProcess) => {
-    // Clean up the download folder
-    const movieFolderPath = path.join(process.downloadPath, process.torrentName);
+  onTerminate: (streamProcess: StreamProcess) => {
+    // Force immediate cleanup without waiting for timers
+    console.log(`Force terminating stream: ${streamProcess.name}`);
+    
+    // Clean up the download folder immediately
+    const movieFolderPath = path.join(streamProcess.downloadPath, streamProcess.torrentName);
     
     if (fs.existsSync(movieFolderPath)) {
       console.log(`Cleaning up stream folder: ${movieFolderPath}`);
@@ -66,11 +69,9 @@ let activeServer: {
 export const streamMovie = async ({
   magnetLinkUrl,
   downloadPath,
-  airplay = false,
 }: {
   magnetLinkUrl: string;
   downloadPath: string;
-  airplay?: boolean;
 }) => {
   // Import tray functions dynamically to avoid circular deps
   const { addActiveProcess, updateActiveProcess, removeActiveProcess } = await import("../../electron/tray");
@@ -119,10 +120,18 @@ export const streamMovie = async ({
           downloadPath,
           torrentName: torrent.name,
           cleanup: () => {
-            if (idleCheckInterval) clearInterval(idleCheckInterval);
-            if (progressInterval) clearInterval(progressInterval);
-            server.close();
-            client.destroy();
+            try {
+              if (idleCheckInterval) clearInterval(idleCheckInterval);
+              if (progressInterval) clearInterval(progressInterval);
+              if (server && server.listening) {
+                server.close();
+              }
+              if (client && !client.destroyed) {
+                client.destroy();
+              }
+            } catch (error) {
+              console.error("Error during stream cleanup:", error);
+            }
           },
         } as StreamProcess);
 
@@ -204,19 +213,8 @@ export const streamMovie = async ({
           console.log(`Movie streaming at: ${streamUrl}`);
           console.log(`Movie: ${movieFile.name}`);
 
-          // Open in default video player or AirPlay
-          if (airplay) {
-            // Use beamer or other AirPlay tool if available
-            exec(`open -a Beamer "${streamUrl}"`, (error) => {
-              if (error) {
-                console.log("Beamer not found, trying default player...");
-                exec(`open "${streamUrl}"`);
-              }
-            });
-          } else {
-            // Open in default video player (usually QuickTime on macOS)
-            exec(`open "${streamUrl}"`);
-          }
+          // Open in default video player (usually QuickTime on macOS)
+          exec(`open "${streamUrl}"`);
         });
 
         torrent.on("done", () => {
@@ -238,12 +236,21 @@ export const streamMovie = async ({
         // Cleanup function
         const cleanup = () => {
           console.log("Shutting down stream server...");
-          if (idleCheckInterval) clearInterval(idleCheckInterval);
-          if (progressInterval) clearInterval(progressInterval);
-          server.close();
-          client.destroy();
-          removeActiveProcess(processId);
-          activeServer = null;
+          try {
+            if (idleCheckInterval) clearInterval(idleCheckInterval);
+            if (progressInterval) clearInterval(progressInterval);
+            if (server && server.listening) {
+              server.close();
+            }
+            if (client && !client.destroyed) {
+              client.destroy();
+            }
+          } catch (error) {
+            console.error("Error during stream cleanup:", error);
+          } finally {
+            removeActiveProcess(processId);
+            activeServer = null;
+          }
         };
 
         // Store active server for future cleanup

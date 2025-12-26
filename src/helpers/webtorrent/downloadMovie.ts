@@ -41,9 +41,12 @@ export const downloadProcessUI = {
     }
     return false;
   },
-  onTerminate: (process: DownloadProcess) => {
-    // Clean up the download folder
-    const movieFolderPath = path.join(process.downloadPath, process.torrentName);
+  onTerminate: (downloadProcess: DownloadProcess) => {
+    // Force immediate cleanup without waiting for timers
+    console.log(`Force terminating download: ${downloadProcess.name}`);
+    
+    // Clean up the download folder immediately
+    const movieFolderPath = path.join(downloadProcess.downloadPath, downloadProcess.torrentName);
     
     if (fs.existsSync(movieFolderPath)) {
       console.log(`Cleaning up download folder: ${movieFolderPath}`);
@@ -97,8 +100,14 @@ export const downloadMovie = async ({
           downloadPath,
           torrentName: torrent.name,
           cleanup: () => {
-            clearInterval(progressInterval);
-            client.destroy();
+            try {
+              clearInterval(progressInterval);
+              if (client && !client.destroyed) {
+                client.destroy();
+              }
+            } catch (error) {
+              console.error("Error during download cleanup:", error);
+            }
           },
         } as DownloadProcess);
 
