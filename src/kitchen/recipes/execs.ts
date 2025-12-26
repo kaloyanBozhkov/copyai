@@ -289,6 +289,63 @@ export const execsPerCategory: Record<
     ],
   },
   movie: {
+    stream: [
+      async (args?: string[]) => {
+        if (!args || !args[0]) return "no movie title provided";
+        const text = args.join(" ");
+        if (!text) return "no movie title provided";
+
+        const link = await getPiratebaySearchLink(text);
+        const {
+          elementsHTML: selectedItemsElementsHTML,
+          text: selectedItemsHTML,
+        } = await getPageHTMLWithJS({
+          url: link,
+          selector: "ol li",
+          limit: 10,
+          skip: 1,
+          returnOuterHTML: true,
+        });
+
+        if (selectedItemsHTML.length === 0) {
+          return "No torrents found for this movie";
+        }
+
+        const { index } = await retry(
+          async () => {
+            return getLLMResponse({
+              systemMessage: await getMovieSystemMessage(selectedItemsHTML),
+              userMessage: text,
+              schema: z.object({
+                index: z.number(),
+              }),
+            });
+          },
+          3,
+          false
+        );
+
+        const selectedItem = selectedItemsElementsHTML[index];
+        if (!selectedItem) {
+          return `Invalid index ${index} returned. Available items: ${selectedItemsElementsHTML.length}`;
+        }
+
+        const magnetLink = parse(selectedItem).querySelector(
+          'a[href^="magnet:?"]'
+        );
+        if (!magnetLink) return "no magnet link found";
+        const magnetLinkUrl = magnetLink.getAttribute("href");
+        if (!magnetLinkUrl) return "no magnet link URL found";
+
+        // stream the torrent (non-blocking)
+        const downloadPath = path.join(os.homedir(), "Downloads", "movies");
+
+        streamMovie({ magnetLinkUrl, downloadPath });
+
+        return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
+      },
+      "title: string",
+    ],
     download: [
       async (args?: string[]) => {
         if (!args || !args[0]) return "no movie title provided";
@@ -350,32 +407,34 @@ export const execsPerCategory: Record<
       },
       "title: string, year?: number",
     ],
+  },
+  anime: {
     stream: [
       async (args?: string[]) => {
-        if (!args || !args[0]) return "no movie title provided";
+        if (!args || !args[0]) return "no anime title provided";
         const text = args.join(" ");
-        if (!text) return "no movie title provided";
+        if (!text) return "no anime title provided";
 
-        const link = await getPiratebaySearchLink(text);
+        const link = await getAnimeSearchLink(text);
         const {
           elementsHTML: selectedItemsElementsHTML,
           text: selectedItemsHTML,
         } = await getPageHTMLWithJS({
           url: link,
-          selector: "ol li",
+          selector: "tbody tr",
           limit: 10,
           skip: 1,
           returnOuterHTML: true,
         });
 
         if (selectedItemsHTML.length === 0) {
-          return "No torrents found for this movie";
+          return "No torrents found for this anime";
         }
 
         const { index } = await retry(
           async () => {
             return getLLMResponse({
-              systemMessage: await getMovieSystemMessage(selectedItemsHTML),
+              systemMessage: await getAnimeSystemMessage(selectedItemsHTML),
               userMessage: text,
               schema: z.object({
                 index: z.number(),
@@ -399,7 +458,7 @@ export const execsPerCategory: Record<
         if (!magnetLinkUrl) return "no magnet link URL found";
 
         // stream the torrent (non-blocking)
-        const downloadPath = path.join(os.homedir(), "Downloads", "movies");
+        const downloadPath = path.join(os.homedir(), "Downloads", "anime");
 
         streamMovie({ magnetLinkUrl, downloadPath });
 
@@ -407,8 +466,6 @@ export const execsPerCategory: Record<
       },
       "title: string",
     ],
-  },
-  anime: {
     download: [
       async (args?: string[]) => {
         if (!args || !args[0]) return "no anime title provided";
@@ -469,63 +526,6 @@ export const execsPerCategory: Record<
         return `Download started for: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
       },
       "title: string, S_E_: string",
-    ],
-    stream: [
-      async (args?: string[]) => {
-        if (!args || !args[0]) return "no anime title provided";
-        const text = args.join(" ");
-        if (!text) return "no anime title provided";
-
-        const link = await getAnimeSearchLink(text);
-        const {
-          elementsHTML: selectedItemsElementsHTML,
-          text: selectedItemsHTML,
-        } = await getPageHTMLWithJS({
-          url: link,
-          selector: "tbody tr",
-          limit: 10,
-          skip: 1,
-          returnOuterHTML: true,
-        });
-
-        if (selectedItemsHTML.length === 0) {
-          return "No torrents found for this anime";
-        }
-
-        const { index } = await retry(
-          async () => {
-            return getLLMResponse({
-              systemMessage: await getAnimeSystemMessage(selectedItemsHTML),
-              userMessage: text,
-              schema: z.object({
-                index: z.number(),
-              }),
-            });
-          },
-          3,
-          false
-        );
-
-        const selectedItem = selectedItemsElementsHTML[index];
-        if (!selectedItem) {
-          return `Invalid index ${index} returned. Available items: ${selectedItemsElementsHTML.length}`;
-        }
-
-        const magnetLink = parse(selectedItem).querySelector(
-          'a[href^="magnet:?"]'
-        );
-        if (!magnetLink) return "no magnet link found";
-        const magnetLinkUrl = magnetLink.getAttribute("href");
-        if (!magnetLinkUrl) return "no magnet link URL found";
-
-        // stream the torrent (non-blocking)
-        const downloadPath = path.join(os.homedir(), "Downloads", "anime");
-
-        streamMovie({ magnetLinkUrl, downloadPath });
-
-        return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
-      },
-      "title: string",
     ],
   },
 };

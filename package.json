@@ -47,6 +47,7 @@
     "deverything": "^4.5.0",
     "dotenv": "^17.2.3",
     "electron-squirrel-startup": "^1.0.1",
+    "ffmpeg": "^0.0.4",
     "node-html-parser": "^7.0.1",
     "puppeteer": "^24.34.0",
     "uuid": "^13.0.0",

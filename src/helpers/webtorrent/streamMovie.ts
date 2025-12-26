@@ -4,6 +4,7 @@ import http from "http";
 import { v4 as uuidv4 } from "uuid";
 import { dialog } from "electron";
 import fs from "fs";
+import { Readable } from "stream";
 
 export interface StreamProcess {
   id: string;
@@ -23,7 +24,7 @@ export const streamProcessUI = {
   getLabel: (process: StreamProcess) => {
     const speedMB = (process.downloadSpeed / 1024 / 1024).toFixed(2);
     const progressPercent = (process.progress * 100).toFixed(1);
-    
+
     let label = `▶ ${process.name}`;
     label += `\n   ${progressPercent}% • ${speedMB} MB/s • ${process.peers} peers • ${process.activeConnections} conn`;
     return label;
@@ -46,10 +47,13 @@ export const streamProcessUI = {
   onTerminate: (streamProcess: StreamProcess) => {
     // Force immediate cleanup without waiting for timers
     console.log(`Force terminating stream: ${streamProcess.name}`);
-    
+
     // Clean up the download folder immediately
-    const movieFolderPath = path.join(streamProcess.downloadPath, streamProcess.torrentName);
-    
+    const movieFolderPath = path.join(
+      streamProcess.downloadPath,
+      streamProcess.torrentName
+    );
+
     if (fs.existsSync(movieFolderPath)) {
       console.log(`Cleaning up stream folder: ${movieFolderPath}`);
       fs.rmSync(movieFolderPath, { recursive: true, force: true });
@@ -66,6 +70,138 @@ let activeServer: {
   processId: string;
 } | null = null;
 
+const buildVideoPlayerHTML = (videoUrl: string, videoName: string): string => {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${videoName}</title>
+  <link href="https://vjs.zencdn.net/8.6.1/video-js.css" rel="stylesheet" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+    }
+    .video-container {
+      width: 100%;
+      max-width: 1920px;
+      height: 100vh;
+    }
+    .video-js {
+      width: 100%;
+      height: 100%;
+    }
+    .error-log {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 0, 0, 0.8);
+      color: white;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 12px;
+      max-width: 400px;
+      z-index: 10000;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="error-log" id="error-log"></div>
+  <div class="video-container">
+    <video
+      id="video-player"
+      class="video-js vjs-default-skin"
+      controls
+      preload="auto"
+      crossorigin="anonymous"
+      data-setup="{}"
+    >
+      <source src="${videoUrl}" type="video/mp4" />
+      <p class="vjs-no-js">
+        To view this video please enable JavaScript, and consider upgrading to a web browser that
+        <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a>.
+      </p>
+    </video>
+  </div>
+  <script src="https://vjs.zencdn.net/8.6.1/video.min.js"></script>
+  <script>
+    const errorLog = document.getElementById('error-log');
+    function showError(msg) {
+      errorLog.textContent = msg;
+      errorLog.style.display = 'block';
+      console.error(msg);
+    }
+    
+    const player = videojs('video-player', {
+      fluid: true,
+      responsive: true,
+      playbackRates: [0.5, 1, 1.25, 1.5, 2],
+      controls: true,
+      preload: 'auto',
+      html5: {
+        vhs: {
+          overrideNative: false
+        },
+        nativeVideoTracks: false,
+        nativeAudioTracks: false,
+        nativeTextTracks: false
+      }
+    });
+    
+    player.ready(function() {
+      console.log('Video.js player ready');
+    });
+    
+    player.on('error', function() {
+      const error = player.error();
+      if (error) {
+        showError('Player Error: ' + error.code + ' - ' + error.message);
+      }
+    });
+    
+    player.on('loadstart', function() {
+      console.log('Load start');
+    });
+    
+    player.on('loadedmetadata', function() {
+      console.log('Metadata loaded');
+    });
+    
+    player.on('loadeddata', function() {
+      console.log('Data loaded');
+    });
+    
+    player.on('canplay', function() {
+      console.log('Can play');
+    });
+    
+    player.on('waiting', function() {
+      console.log('Waiting for data');
+    });
+    
+    player.on('stalled', function() {
+      showError('Video stalled - buffering');
+    });
+    
+    // Try to play after a short delay
+    setTimeout(function() {
+      player.play().catch(function(err) {
+        showError('Play failed: ' + err.message);
+      });
+    }, 500);
+  </script>
+</body>
+</html>`;
+};
+
 export const streamMovie = async ({
   magnetLinkUrl,
   downloadPath,
@@ -74,8 +210,9 @@ export const streamMovie = async ({
   downloadPath: string;
 }) => {
   // Import tray functions dynamically to avoid circular deps
-  const { addActiveProcess, updateActiveProcess, removeActiveProcess } = await import("../../electron/tray");
-  
+  const { addActiveProcess, updateActiveProcess, removeActiveProcess } =
+    await import("../../electron/tray");
+
   // Kill previous stream if exists
   if (activeServer) {
     console.log("Killing previous stream...");
@@ -141,77 +278,256 @@ export const streamMovie = async ({
         let downloadComplete = false;
         let lastConnectionCloseTime: number | null = null;
         let idleCheckInterval: NodeJS.Timeout | null = null;
-        
+
         const checkAndCleanup = () => {
           // Only cleanup if download is complete AND no active connections AND 5 minutes have passed
           if (downloadComplete && activeConnections === 0) {
             if (!lastConnectionCloseTime) {
               lastConnectionCloseTime = Date.now();
-              console.log("No active connections. Starting 5-minute idle timer...");
+              console.log(
+                "No active connections. Starting 5-minute idle timer..."
+              );
             }
-            
+
             const idleTime = Date.now() - lastConnectionCloseTime;
             const fiveMinutes = 5 * 60 * 1000;
-            
+
             if (idleTime >= fiveMinutes) {
-              console.log("5 minutes of inactivity reached. Shutting down stream server...");
+              console.log(
+                "5 minutes of inactivity reached. Shutting down stream server..."
+              );
               cleanup();
             }
           }
         };
-        
+
         const server = http.createServer((req, res) => {
           activeConnections++;
           lastConnectionCloseTime = null; // Reset idle timer when new connection comes in
-          console.log(`Active connections: ${activeConnections}`);
-          
+          console.log(`Active connections: ${activeConnections} - ${req.method} ${req.url}`);
+
+          // Set CORS headers for all responses
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+          res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Accept");
+          res.setHeader("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges");
+
+          // Handle OPTIONS preflight
+          if (req.method === "OPTIONS") {
+            res.writeHead(200);
+            res.end();
+            return;
+          }
+
           // Update tray with new connection count
           updateActiveProcess(processId, {
             activeConnections,
           });
-          
-          res.setHeader("Content-Type", "video/mp4");
-          res.setHeader("Content-Length", movieFile.length);
-          res.setHeader("Accept-Ranges", "bytes");
+
+          let fileStream: Readable | null = null;
 
           res.on("close", () => {
+            // Clean up file stream if it exists
+            if (fileStream && !fileStream.destroyed) {
+              fileStream.destroy();
+              fileStream = null;
+            }
+
             activeConnections--;
-            console.log(`Connection closed. Active connections: ${activeConnections}`);
-            
+            console.log(
+              `Connection closed. Active connections: ${activeConnections}`
+            );
+
             // Update tray with new connection count
             updateActiveProcess(processId, {
               activeConnections,
             });
-            
+
             checkAndCleanup();
           });
 
-          if (req.headers.range) {
-            // Handle range requests for seeking
-            const parts = req.headers.range.replace(/bytes=/, "").split("-");
-            const start = parseInt(parts[0], 10);
-            const end = parts[1] ? parseInt(parts[1], 10) : movieFile.length - 1;
-            const chunksize = (end - start) + 1;
+          res.on("error", (err: Error) => {
+            // Clean up file stream on response error
+            if (fileStream && !fileStream.destroyed) {
+              fileStream.destroy();
+              fileStream = null;
+            }
+            // Only log unexpected errors (ignore expected close errors)
+            const expectedErrors = [
+              "write after end",
+              "Cannot write after response ended",
+              "Writable stream closed prematurely",
+              "socket hang up",
+              "ECONNRESET"
+            ];
+            if (!expectedErrors.some(e => err.message.includes(e))) {
+              console.error("Response error:", err.message);
+            }
+          });
 
-            res.writeHead(206, {
-              "Content-Range": `bytes ${start}-${end}/${movieFile.length}`,
-              "Content-Length": chunksize,
+          // Serve HTML player at root path
+          if (req.url === "/" || req.url === "") {
+            // Use relative URL so it works from any IP/hostname
+            const videoUrl = "/video";
+            res.setHeader("Content-Type", "text/html; charset=utf-8");
+            res.writeHead(200);
+            res.end(buildVideoPlayerHTML(videoUrl, movieFile.name));
+            return;
+          }
+
+          // Serve video at /video path
+          if (req.url === "/video" || req.url?.startsWith("/video")) {
+            // Determine content type based on file extension
+            const fileName = movieFile.name.toLowerCase();
+            let contentType = "video/mp4";
+            if (fileName.endsWith(".mkv")) contentType = "video/x-matroska";
+            else if (fileName.endsWith(".webm")) contentType = "video/webm";
+            else if (fileName.endsWith(".avi")) contentType = "video/x-msvideo";
+
+            res.setHeader("Content-Type", contentType);
+            res.setHeader("Accept-Ranges", "bytes");
+            res.setHeader("Cache-Control", "no-cache");
+
+            // Handle range requests
+            const rangeHeader = req.headers.range || req.headers["range"];
+            
+            if (rangeHeader) {
+              // Parse range header more robustly
+              const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+              if (rangeMatch) {
+                const start = parseInt(rangeMatch[1], 10);
+                const end = rangeMatch[2] 
+                  ? parseInt(rangeMatch[2], 10)
+                  : movieFile.length - 1;
+                
+                // Validate range
+                if (start >= 0 && start < movieFile.length && end >= start) {
+                  const endPos = Math.min(end, movieFile.length - 1);
+                  const chunksize = endPos - start + 1;
+
+                  res.writeHead(206, {
+                    "Content-Range": `bytes ${start}-${endPos}/${movieFile.length}`,
+                    "Content-Length": chunksize,
+                  });
+
+                  console.log(`Serving range: ${start}-${endPos} (${chunksize} bytes)`);
+                  const stream = movieFile.createReadStream({ start, end: endPos });
+                  fileStream = stream;
+                  const currentStream = stream;
+                  
+                  currentStream.on("error", (err: Error) => {
+                    // Expected errors when user closes connection
+                    const expectedErrors = [
+                      "Writable stream closed prematurely",
+                      "write after end",
+                      "Cannot write after response ended",
+                      "socket hang up",
+                      "ECONNRESET"
+                    ];
+                    
+                    if (expectedErrors.some(e => err.message.includes(e))) {
+                      // Silently handle expected close errors
+                      if (currentStream && !currentStream.destroyed) {
+                        currentStream.destroy();
+                      }
+                      return;
+                    }
+                    
+                    // Only log/log unexpected errors if response is still writable
+                    if (!res.destroyed && !res.closed) {
+                      console.error("Stream error:", err.message);
+                      if (!res.headersSent) {
+                        res.writeHead(500);
+                        res.end("Stream Error");
+                      } else if (!res.writableEnded) {
+                        res.end();
+                      }
+                    }
+                    // Clean up stream
+                    if (currentStream && !currentStream.destroyed) {
+                      currentStream.destroy();
+                    }
+                  });
+
+                  currentStream.on("end", () => {
+                    if (fileStream === currentStream) {
+                      fileStream = null;
+                    }
+                  });
+
+                  currentStream.pipe(res, { end: true });
+                  return;
+                }
+              }
+            }
+
+            // No valid range request, send full file or initial chunk
+            // Some TV browsers need initial range even if not requested
+            const initialChunkSize = Math.min(1024 * 1024, movieFile.length); // 1MB or file size
+            
+            res.setHeader("Content-Length", movieFile.length);
+            res.setHeader("Content-Range", `bytes 0-${movieFile.length - 1}/${movieFile.length}`);
+            
+            res.writeHead(200);
+            console.log(`Serving full file: ${movieFile.length} bytes`);
+            const stream = movieFile.createReadStream();
+            fileStream = stream;
+            const currentStream = stream;
+            
+            currentStream.on("error", (err: Error) => {
+              // Expected errors when user closes connection
+              const expectedErrors = [
+                "Writable stream closed prematurely",
+                "write after end",
+                "Cannot write after response ended",
+                "socket hang up",
+                "ECONNRESET"
+              ];
+              
+              if (expectedErrors.some(e => err.message.includes(e))) {
+                // Silently handle expected close errors
+                if (currentStream && !currentStream.destroyed) {
+                  currentStream.destroy();
+                }
+                return;
+              }
+              
+              // Only log unexpected errors if response is still writable
+              if (!res.destroyed && !res.closed) {
+                console.error("Stream error:", err.message);
+                if (!res.headersSent) {
+                  res.writeHead(500);
+                  res.end("Stream Error");
+                } else if (!res.writableEnded) {
+                  res.end();
+                }
+              }
+              // Clean up stream
+              if (currentStream && !currentStream.destroyed) {
+                currentStream.destroy();
+              }
             });
 
-            const stream = movieFile.createReadStream({ start, end });
-            stream.pipe(res);
-          } else {
-            // No range request, stream entire file
-            res.writeHead(200);
-            const stream = movieFile.createReadStream();
-            stream.pipe(res);
+            currentStream.on("end", () => {
+              if (fileStream === currentStream) {
+                fileStream = null;
+              }
+            });
+
+            currentStream.pipe(res, { end: true });
+            return;
           }
+
+          // 404 for other paths
+          res.writeHead(404);
+          res.end("Not Found");
         });
 
-        server.listen(port, () => {
+        server.listen(port, "0.0.0.0", () => {
           const streamUrl = `http://localhost:${port}`;
           console.log(`Movie streaming at: ${streamUrl}`);
           console.log(`Movie: ${movieFile.name}`);
+          console.log(`Access from TV: http://<your-ip>:${port}`);
 
           // Open in default video player (usually QuickTime on macOS)
           exec(`open "${streamUrl}"`);
@@ -220,14 +536,10 @@ export const streamMovie = async ({
         torrent.on("done", () => {
           downloadComplete = true;
           console.log(`Download complete: ${movieFile.name}`);
-          console.log("Stream server will remain active while connections exist");
-          // Open Finder at the movie folder when done
-          exec(`open "${movieFolderPath}"`, (error) => {
-            if (error) {
-              console.error("Error opening Finder:", error);
-            }
-          });
-          
+          console.log(
+            "Stream server will remain active while connections exist"
+          );
+
           // Start checking every minute for idle timeout
           idleCheckInterval = setInterval(checkAndCleanup, 60 * 1000);
           checkAndCleanup();
@@ -267,7 +579,9 @@ export const streamMovie = async ({
           console.log(
             `Download speed: ${(torrent.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s`
           );
-          console.log(`Upload speed: ${(torrent.uploadSpeed / 1024 / 1024).toFixed(2)} MB/s`);
+          console.log(
+            `Upload speed: ${(torrent.uploadSpeed / 1024 / 1024).toFixed(2)} MB/s`
+          );
           console.log(`Peers: ${torrent.numPeers}`);
 
           // Update tray
@@ -289,4 +603,3 @@ export const streamMovie = async ({
       console.error("Error loading webtorrent:", error);
     });
 };
-
