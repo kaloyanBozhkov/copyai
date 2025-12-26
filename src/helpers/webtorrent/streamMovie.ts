@@ -5,6 +5,11 @@ import { v4 as uuidv4 } from "uuid";
 import { dialog } from "electron";
 import fs from "fs";
 import { Readable } from "stream";
+import {
+  addActiveProcess,
+  removeActiveProcess,
+  updateActiveProcess,
+} from "../../electron/tray";
 
 export interface StreamProcess {
   id: string;
@@ -22,11 +27,18 @@ export interface StreamProcess {
 
 export const streamProcessUI = {
   getLabel: (process: StreamProcess) => {
-    const speedMB = (process.downloadSpeed / 1024 / 1024).toFixed(2);
     const progressPercent = (process.progress * 100).toFixed(1);
 
     let label = `▶ ${process.name}`;
-    label += `\n   ${progressPercent}% • ${speedMB} MB/s • ${process.peers} peers • ${process.activeConnections} conn`;
+
+    // Show streaming status when complete
+    if (progressPercent === "100.0") {
+      label += `\n   🎬 STREAMING • ${process.activeConnections} active viewers`;
+    } else {
+      const speedMB = (process.downloadSpeed / 1024 / 1024).toFixed(2);
+      label += `\n   ${progressPercent}% • ${speedMB} MB/s • ${process.peers} peers • ${process.activeConnections} conn`;
+    }
+
     return label;
   },
   onClick: (process: StreamProcess) => {
@@ -69,6 +81,65 @@ let activeServer: {
   cleanup: () => void;
   processId: string;
 } | null = null;
+
+const extractSubtitles = (movieFile: any, movieFolderPath: string) => {
+  const moviePath = path.join(movieFolderPath, movieFile.name);
+
+  console.log(`Checking for subtitles in: ${moviePath}`);
+
+  // First, probe the file to find subtitle streams
+  exec(
+    `ffprobe -v error -select_streams s -show_entries stream=index:stream_tags=language -of json "${moviePath}"`,
+    (error, stdout, stderr) => {
+      if (error) {
+        console.log("No subtitles found or ffprobe not available");
+        return;
+      }
+
+      try {
+        const probeData = JSON.parse(stdout);
+        const subtitleStreams = probeData.streams || [];
+
+        if (subtitleStreams.length === 0) {
+          console.log("No embedded subtitles found");
+          return;
+        }
+
+        console.log(`Found ${subtitleStreams.length} subtitle stream(s)`);
+
+        // Extract each subtitle stream
+        subtitleStreams.forEach((stream: any, idx: number) => {
+          const language = stream.tags?.language || `track${idx}`;
+          const streamIndex = stream.index;
+          const baseName = path.basename(
+            movieFile.name,
+            path.extname(movieFile.name)
+          );
+          const subtitlePath = path.join(
+            movieFolderPath,
+            `${baseName}.${language}.srt`
+          );
+
+          exec(
+            `ffmpeg -i "${moviePath}" -map 0:${streamIndex} -c:s srt "${subtitlePath}" -y`,
+            (extractError, extractStdout, extractStderr) => {
+              if (extractError) {
+                console.error(
+                  `Failed to extract subtitle ${language}:`,
+                  extractError.message
+                );
+                return;
+              }
+              console.log(`Extracted subtitle: ${subtitlePath}`);
+            }
+          );
+        });
+      } catch (parseError) {
+        console.error("Failed to parse ffprobe output:", parseError);
+      }
+    }
+  );
+};
 
 const buildVideoPlayerHTML = (videoUrl: string, videoName: string): string => {
   return `<!DOCTYPE html>
@@ -191,6 +262,39 @@ const buildVideoPlayerHTML = (videoUrl: string, videoName: string): string => {
       showError('Video stalled - buffering');
     });
     
+    // Track loaded subtitles to avoid duplicates
+    const loadedSubtitles = new Set();
+    
+    // Poll for subtitles every 5 seconds
+    function checkForSubtitles() {
+      fetch('/subtitles')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data.subtitles && data.subtitles.length > 0) {
+            data.subtitles.forEach(function(sub, index) {
+              if (!loadedSubtitles.has(sub.filename)) {
+                console.log('Adding subtitle track:', sub.label);
+                player.addRemoteTextTrack({
+                  kind: 'captions',
+                  src: sub.url,
+                  srclang: sub.language,
+                  label: sub.label,
+                  default: index === 0
+                }, false);
+                loadedSubtitles.add(sub.filename);
+              }
+            });
+          }
+        })
+        .catch(function(err) {
+          console.log('No subtitles available yet');
+        });
+    }
+    
+    // Check immediately and then every 5 seconds
+    checkForSubtitles();
+    setInterval(checkForSubtitles, 5000);
+    
     // Try to play after a short delay
     setTimeout(function() {
       player.play().catch(function(err) {
@@ -209,10 +313,6 @@ export const streamMovie = async ({
   magnetLinkUrl: string;
   downloadPath: string;
 }) => {
-  // Import tray functions dynamically to avoid circular deps
-  const { addActiveProcess, updateActiveProcess, removeActiveProcess } =
-    await import("../../electron/tray");
-
   // Kill previous stream if exists
   if (activeServer) {
     console.log("Killing previous stream...");
@@ -304,13 +404,21 @@ export const streamMovie = async ({
         const server = http.createServer((req, res) => {
           activeConnections++;
           lastConnectionCloseTime = null; // Reset idle timer when new connection comes in
-          console.log(`Active connections: ${activeConnections} - ${req.method} ${req.url}`);
+          console.log(
+            `Active connections: ${activeConnections} - ${req.method} ${req.url}`
+          );
 
           // Set CORS headers for all responses
           res.setHeader("Access-Control-Allow-Origin", "*");
           res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-          res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Accept");
-          res.setHeader("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges");
+          res.setHeader(
+            "Access-Control-Allow-Headers",
+            "Range, Content-Type, Accept"
+          );
+          res.setHeader(
+            "Access-Control-Expose-Headers",
+            "Content-Range, Content-Length, Accept-Ranges"
+          );
 
           // Handle OPTIONS preflight
           if (req.method === "OPTIONS") {
@@ -358,9 +466,9 @@ export const streamMovie = async ({
               "Cannot write after response ended",
               "Writable stream closed prematurely",
               "socket hang up",
-              "ECONNRESET"
+              "ECONNRESET",
             ];
-            if (!expectedErrors.some(e => err.message.includes(e))) {
+            if (!expectedErrors.some((e) => err.message.includes(e))) {
               console.error("Response error:", err.message);
             }
           });
@@ -372,6 +480,50 @@ export const streamMovie = async ({
             res.setHeader("Content-Type", "text/html; charset=utf-8");
             res.writeHead(200);
             res.end(buildVideoPlayerHTML(videoUrl, movieFile.name));
+            return;
+          }
+
+          // Serve subtitle list endpoint
+          if (req.url === "/subtitles") {
+            res.setHeader("Content-Type", "application/json");
+            res.writeHead(200);
+
+            try {
+              const files = fs.readdirSync(movieFolderPath);
+              const subtitles = files
+                .filter((f) => f.endsWith(".srt"))
+                .map((f) => {
+                  const match = f.match(/\.([a-z]{2,3})\.srt$/i);
+                  const language = match ? match[1] : "unknown";
+                  return {
+                    filename: f,
+                    url: `/subtitles/${encodeURIComponent(f)}`,
+                    language: language,
+                    label: language.toUpperCase(),
+                  };
+                });
+              res.end(JSON.stringify({ subtitles }));
+            } catch (err) {
+              res.end(JSON.stringify({ subtitles: [] }));
+            }
+            return;
+          }
+
+          // Serve subtitle files
+          if (req.url?.startsWith("/subtitles/")) {
+            const filename = decodeURIComponent(
+              req.url.replace("/subtitles/", "")
+            );
+            const subtitlePath = path.join(movieFolderPath, filename);
+
+            if (fs.existsSync(subtitlePath) && filename.endsWith(".srt")) {
+              res.setHeader("Content-Type", "text/plain; charset=utf-8");
+              res.writeHead(200);
+              fs.createReadStream(subtitlePath).pipe(res);
+            } else {
+              res.writeHead(404);
+              res.end("Subtitle not found");
+            }
             return;
           }
 
@@ -390,16 +542,16 @@ export const streamMovie = async ({
 
             // Handle range requests
             const rangeHeader = req.headers.range || req.headers["range"];
-            
+
             if (rangeHeader) {
               // Parse range header more robustly
               const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
               if (rangeMatch) {
                 const start = parseInt(rangeMatch[1], 10);
-                const end = rangeMatch[2] 
+                const end = rangeMatch[2]
                   ? parseInt(rangeMatch[2], 10)
                   : movieFile.length - 1;
-                
+
                 // Validate range
                 if (start >= 0 && start < movieFile.length && end >= start) {
                   const endPos = Math.min(end, movieFile.length - 1);
@@ -410,11 +562,16 @@ export const streamMovie = async ({
                     "Content-Length": chunksize,
                   });
 
-                  console.log(`Serving range: ${start}-${endPos} (${chunksize} bytes)`);
-                  const stream = movieFile.createReadStream({ start, end: endPos });
+                  console.log(
+                    `Serving range: ${start}-${endPos} (${chunksize} bytes)`
+                  );
+                  const stream = movieFile.createReadStream({
+                    start,
+                    end: endPos,
+                  });
                   fileStream = stream;
                   const currentStream = stream;
-                  
+
                   currentStream.on("error", (err: Error) => {
                     // Expected errors when user closes connection
                     const expectedErrors = [
@@ -422,17 +579,17 @@ export const streamMovie = async ({
                       "write after end",
                       "Cannot write after response ended",
                       "socket hang up",
-                      "ECONNRESET"
+                      "ECONNRESET",
                     ];
-                    
-                    if (expectedErrors.some(e => err.message.includes(e))) {
+
+                    if (expectedErrors.some((e) => err.message.includes(e))) {
                       // Silently handle expected close errors
                       if (currentStream && !currentStream.destroyed) {
                         currentStream.destroy();
                       }
                       return;
                     }
-                    
+
                     // Only log/log unexpected errors if response is still writable
                     if (!res.destroyed && !res.closed) {
                       console.error("Stream error:", err.message);
@@ -464,16 +621,19 @@ export const streamMovie = async ({
             // No valid range request, send full file or initial chunk
             // Some TV browsers need initial range even if not requested
             const initialChunkSize = Math.min(1024 * 1024, movieFile.length); // 1MB or file size
-            
+
             res.setHeader("Content-Length", movieFile.length);
-            res.setHeader("Content-Range", `bytes 0-${movieFile.length - 1}/${movieFile.length}`);
-            
+            res.setHeader(
+              "Content-Range",
+              `bytes 0-${movieFile.length - 1}/${movieFile.length}`
+            );
+
             res.writeHead(200);
             console.log(`Serving full file: ${movieFile.length} bytes`);
             const stream = movieFile.createReadStream();
             fileStream = stream;
             const currentStream = stream;
-            
+
             currentStream.on("error", (err: Error) => {
               // Expected errors when user closes connection
               const expectedErrors = [
@@ -481,17 +641,17 @@ export const streamMovie = async ({
                 "write after end",
                 "Cannot write after response ended",
                 "socket hang up",
-                "ECONNRESET"
+                "ECONNRESET",
               ];
-              
-              if (expectedErrors.some(e => err.message.includes(e))) {
+
+              if (expectedErrors.some((e) => err.message.includes(e))) {
                 // Silently handle expected close errors
                 if (currentStream && !currentStream.destroyed) {
                   currentStream.destroy();
                 }
                 return;
               }
-              
+
               // Only log unexpected errors if response is still writable
               if (!res.destroyed && !res.closed) {
                 console.error("Stream error:", err.message);
@@ -533,16 +693,52 @@ export const streamMovie = async ({
           exec(`open "${streamUrl}"`);
         });
 
-        torrent.on("done", () => {
-          downloadComplete = true;
-          console.log(`Download complete: ${movieFile.name}`);
-          console.log(
-            "Stream server will remain active while connections exist"
-          );
+        // Check if movie file download is complete
+        const checkMovieFileComplete = () => {
+          // WebTorrent's file.path is relative to downloadPath and includes torrent folder
+          const movieFilePath = path.join(downloadPath, movieFile.path);
+          console.log(`Checking if movie complete: ${movieFilePath}`);
+          console.log(`File exists: ${fs.existsSync(movieFilePath)}`);
 
-          // Start checking every minute for idle timeout
-          idleCheckInterval = setInterval(checkAndCleanup, 60 * 1000);
-          checkAndCleanup();
+          if (fs.existsSync(movieFilePath)) {
+            const stats = fs.statSync(movieFilePath);
+            console.log(
+              `File size: ${stats.size}, Expected: ${movieFile.length}`
+            );
+
+            if (stats.size >= movieFile.length) {
+              downloadComplete = true;
+              console.log(`✓ Download complete: ${movieFile.name}`);
+              console.log(
+                "Stream server will remain active while connections exist"
+              );
+
+              // Update tray to show streaming status
+              updateActiveProcess(processId, {
+                progress: 1,
+                downloadSpeed: 0,
+                uploadSpeed: 0,
+                name: `${movieFile.name} - STREAMING`,
+              });
+
+              // Extract subtitles from movie file if any exist
+              console.log("Starting subtitle extraction...");
+              extractSubtitles(movieFile, movieFolderPath);
+
+              // Start checking every minute for idle timeout
+              idleCheckInterval = setInterval(checkAndCleanup, 60 * 1000);
+              checkAndCleanup();
+
+              return true;
+            }
+          }
+          return false;
+        };
+
+        torrent.on("done", () => {
+          if (!downloadComplete) {
+            checkMovieFileComplete();
+          }
         });
 
         // Cleanup function
@@ -593,10 +789,26 @@ export const streamMovie = async ({
             activeConnections,
           });
 
-          if (torrent.done) {
+          // Check if movie file is complete (since we only selected one file)
+          // Use >= 0.999 to catch cases where progress might be very close to 1
+          if (!downloadComplete && torrent.progress >= 0.999) {
+            checkMovieFileComplete();
+          }
+
+          if (torrent.done || downloadComplete) {
             clearInterval(progressInterval!);
           }
         }, 5000);
+
+        // Check immediately if already complete (e.g., previously downloaded)
+        if (torrent.progress >= 0.999) {
+          setTimeout(() => {
+            if (!downloadComplete) {
+              console.log("File appears to be already downloaded, checking...");
+              checkMovieFileComplete();
+            }
+          }, 2000);
+        }
       });
     })
     .catch((error) => {

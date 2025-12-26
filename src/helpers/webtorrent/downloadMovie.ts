@@ -3,6 +3,11 @@ import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { dialog } from "electron";
 import fs from "fs";
+import {
+  addActiveProcess,
+  removeActiveProcess,
+  updateActiveProcess,
+} from "../../electron/tray";
 
 export interface DownloadProcess {
   id: string;
@@ -21,7 +26,7 @@ export const downloadProcessUI = {
   getLabel: (process: DownloadProcess) => {
     const speedMB = (process.downloadSpeed / 1024 / 1024).toFixed(2);
     const progressPercent = (process.progress * 100).toFixed(1);
-    
+
     let label = `⬇ ${process.name}`;
     label += `\n   ${progressPercent}% • ${speedMB} MB/s • ${process.peers} peers`;
     return label;
@@ -44,10 +49,13 @@ export const downloadProcessUI = {
   onTerminate: (downloadProcess: DownloadProcess) => {
     // Force immediate cleanup without waiting for timers
     console.log(`Force terminating download: ${downloadProcess.name}`);
-    
+
     // Clean up the download folder immediately
-    const movieFolderPath = path.join(downloadProcess.downloadPath, downloadProcess.torrentName);
-    
+    const movieFolderPath = path.join(
+      downloadProcess.downloadPath,
+      downloadProcess.torrentName
+    );
+
     if (fs.existsSync(movieFolderPath)) {
       console.log(`Cleaning up download folder: ${movieFolderPath}`);
       fs.rmSync(movieFolderPath, { recursive: true, force: true });
@@ -64,8 +72,6 @@ export const downloadMovie = async ({
   downloadPath: string;
 }) => {
   const processId = uuidv4();
-  // Import tray functions dynamically to avoid circular deps
-  const { addActiveProcess, updateActiveProcess, removeActiveProcess } = await import("../../electron/tray");
   // Dynamic import for ESM module (using eval to prevent TS from compiling to require)
   (eval('import("webtorrent")') as Promise<any>)
     .then((WebTorrentModule) => {
