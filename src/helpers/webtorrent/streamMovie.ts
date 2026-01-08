@@ -122,7 +122,7 @@ const extractSubtitles = (movieFile: any, movieFolderPath: string) => {
 
           exec(
             `ffmpeg -i "${moviePath}" -map 0:${streamIndex} -c:s srt "${subtitlePath}" -y`,
-            (extractError, extractStdout, extractStderr) => {
+            (extractError) => {
               if (extractError) {
                 console.error(
                   `Failed to extract subtitle ${language}:`,
@@ -328,8 +328,18 @@ export const streamMovie = async ({
       const WebTorrent = WebTorrentModule.default;
       const client = new WebTorrent();
 
+      // Add error handler for client
+      client.on('error', (err: Error) => {
+        console.error('WebTorrent client error:', err);
+      });
+
       client.add(magnetLinkUrl, { path: downloadPath }, (torrent: any) => {
         console.log(`Starting stream: ${torrent.name}`);
+
+        // Add error handler for torrent
+        torrent.on('error', (err: Error) => {
+          console.error('Torrent error:', err);
+        });
 
         // Find the largest file (the movie file)
         const movieFile = torrent.files.reduce((largest: any, file: any) =>
@@ -687,7 +697,7 @@ export const streamMovie = async ({
           const streamUrl = `http://localhost:${port}`;
           console.log(`Movie streaming at: ${streamUrl}`);
           console.log(`Movie: ${movieFile.name}`);
-          console.log(`Access from TV: http://<your-ip>:${port}`);
+          console.log(`Access from TV: http://koko-mac.com:${port}`);
 
           // Open in default video player (usually QuickTime on macOS)
           exec(`open "${streamUrl}"`);
@@ -695,44 +705,30 @@ export const streamMovie = async ({
 
         // Check if movie file download is complete
         const checkMovieFileComplete = () => {
-          // WebTorrent's file.path is relative to downloadPath and includes torrent folder
-          const movieFilePath = path.join(downloadPath, movieFile.path);
-          console.log(`Checking if movie complete: ${movieFilePath}`);
-          console.log(`File exists: ${fs.existsSync(movieFilePath)}`);
+          if (!movieFile.done) return false;
 
-          if (fs.existsSync(movieFilePath)) {
-            const stats = fs.statSync(movieFilePath);
-            console.log(
-              `File size: ${stats.size}, Expected: ${movieFile.length}`
-            );
+          downloadComplete = true;
+          console.log(`✓ Download complete: ${movieFile.name}`);
+          console.log(
+            "Stream server will remain active while connections exist"
+          );
 
-            if (stats.size >= movieFile.length) {
-              downloadComplete = true;
-              console.log(`✓ Download complete: ${movieFile.name}`);
-              console.log(
-                "Stream server will remain active while connections exist"
-              );
+          // Update tray to show streaming status
+          updateActiveProcess(processId, {
+            progress: 1,
+            downloadSpeed: 0,
+            uploadSpeed: 0,
+            name: `${movieFile.name} - STREAMING`,
+          });
 
-              // Update tray to show streaming status
-              updateActiveProcess(processId, {
-                progress: 1,
-                downloadSpeed: 0,
-                uploadSpeed: 0,
-                name: `${movieFile.name} - STREAMING`,
-              });
+          // Extract subtitles from movie file if any exist
+          console.log("Starting subtitle extraction...");
+          extractSubtitles(movieFile, movieFolderPath);
 
-              // Extract subtitles from movie file if any exist
-              console.log("Starting subtitle extraction...");
-              extractSubtitles(movieFile, movieFolderPath);
-
-              // Start checking every minute for idle timeout
-              idleCheckInterval = setInterval(checkAndCleanup, 60 * 1000);
-              checkAndCleanup();
-
-              return true;
-            }
-          }
-          return false;
+          // Start checking every minute for idle timeout
+          idleCheckInterval = setInterval(checkAndCleanup, 60 * 1000);
+          checkAndCleanup();
+          return true;
         };
 
         torrent.on("done", () => {

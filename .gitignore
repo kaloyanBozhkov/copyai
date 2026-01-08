@@ -5,3 +5,4 @@ log.txt
 .env
 .env.local
 out/
+.pnpm-store

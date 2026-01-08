@@ -8,9 +8,12 @@ import z from "zod";
 import { retry } from "@koko420/shared";
 import {
   getCoverLetterSystemMessage,
+  getEmailComposeLanguageSystemMessage,
+  getEmailComposeSystemMessage,
   getEmailReplySystemMessage,
   getJobQuestionAnswerSystemMessage,
   getLinkedinReplySystemMessage,
+  getSlackReplySystemMessage,
 } from "../../ai/replies";
 import { summarizeTextSystemMessage } from "../../ai/summaries";
 import {
@@ -85,33 +88,6 @@ export const execsPerCategory: Record<
       "language: string",
       "text: string",
     ],
-    email_reply: [
-      async (args?: string[]) => {
-        if (!args || !args[0]) return "no email text provided";
-        const emailText = args.join(" ");
-
-        if (!emailText) return "no email text provided";
-
-        const result = await retry(
-          () => {
-            return getLLMResponse({
-              systemMessage: getEmailReplySystemMessage,
-              userMessage: emailText,
-              schema: z.object({
-                reply: z.string(),
-              }),
-            });
-          },
-          3,
-          false
-        );
-
-        console.log("result", result);
-
-        return result.reply;
-      },
-      "email text: string",
-    ],
     summarize: [
       async (args?: string[]) => {
         if (!args || !args[0]) return "no text provided";
@@ -138,8 +114,74 @@ export const execsPerCategory: Record<
       "text: string",
     ],
   },
-  reply: {
-    linkedin: [
+  email: {
+    reply: [
+      async (args?: string[]) => {
+        if (!args || !args[0]) return "no email text provided";
+        const emailText = args.join(" ");
+
+        if (!emailText) return "no email text provided";
+
+        const result = await retry(
+          () => {
+            return getLLMResponse({
+              systemMessage: getEmailReplySystemMessage,
+              userMessage: emailText,
+              schema: z.object({
+                reply: z.string(),
+              }),
+            });
+          },
+          3,
+          false
+        );
+
+        console.log("result", result);
+
+        return result.reply;
+      },
+      "email text: string",
+    ],
+    compose: [
+      async (args?: string[]) => {
+        if (!args || !args[0]) return "no email topic provided";
+        const emailTopic = args.join(" ");
+
+        if (!emailTopic) return "no email topic provided";
+
+        const result = await retry(
+          () => {
+            return getLLMResponse({
+              systemMessage: getEmailComposeSystemMessage({
+                name: "John Doe",
+                role: "Software Engineer",
+                company: "Google",
+                location: "San Francisco, CA",
+                industry: "Technology",
+                experience: "10 years",
+                education: "Bachelor of Science in Computer Science",
+                skills: "JavaScript, Python, React, Node.js",
+              }),
+              userMessage: emailTopic,
+              schema: z.object({
+                reply: z.string(),
+              }),
+            });
+          },
+          3,
+          false
+        );
+
+        console.log("result", result);
+
+        return result.reply;
+      },
+      "email topic: string",
+    ],
+  },
+
+  linkedin: {
+    reply: [
       async (args?: string[]) => {
         if (!args || !args[0]) return "no message provided";
         const message = args.join(" ");
@@ -149,6 +191,32 @@ export const execsPerCategory: Record<
           async () => {
             return getLLMResponse({
               systemMessage: await getLinkedinReplySystemMessage(),
+              userMessage: message,
+              schema: z.object({
+                reply: z.string(),
+              }),
+            });
+          },
+          3,
+          false
+        );
+
+        return result.reply;
+      },
+      "message: string",
+    ],
+  },
+  slack: {
+    reply: [
+      async (args?: string[]) => {
+        if (!args || !args[0]) return "no slack message provided";
+        const message = args.join(" ");
+        if (!message) return "no slack message provided";
+
+        const result = await retry(
+          async () => {
+            return getLLMResponse({
+              systemMessage: getSlackReplySystemMessage,
               userMessage: message,
               schema: z.object({
                 reply: z.string(),
@@ -340,7 +408,7 @@ export const execsPerCategory: Record<
         // stream the torrent (non-blocking)
         const downloadPath = path.join(os.homedir(), "Downloads", "movies");
 
-        streamMovie({ magnetLinkUrl, downloadPath });
+        await streamMovie({ magnetLinkUrl, downloadPath });
 
         return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
       },
@@ -530,32 +598,33 @@ export const execsPerCategory: Record<
   },
 };
 
+const LANGUAGES = [
+  "italian",
+  "bulgarian",
+  "spanish",
+  "english",
+  "german",
+  "french",
+  "portuguese",
+  "russian",
+  "chinese",
+  "japanese",
+  "korean",
+  "arabic",
+  "hindi",
+  "bengali",
+  "turkish",
+  "indonesian",
+  "malay",
+  "thai",
+  "vietnamese",
+  "filipino",
+  "malaysian",
+  "singaporean",
+  "taiwanese",
+];
+
 const setupLanguageTranslationCommands = () => {
-  const LANGUAGES = [
-    "italian",
-    "bulgarian",
-    "spanish",
-    "english",
-    "german",
-    "french",
-    "portuguese",
-    "russian",
-    "chinese",
-    "japanese",
-    "korean",
-    "arabic",
-    "hindi",
-    "bengali",
-    "turkish",
-    "indonesian",
-    "malay",
-    "thai",
-    "vietnamese",
-    "filipino",
-    "malaysian",
-    "singaporean",
-    "taiwanese",
-  ];
   const curryExec = (language: string) => async (args?: string[]) => {
     const text = args?.[0] ?? "";
     return execsPerCategory.ai.translate[0]([language + " " + text]);
@@ -575,5 +644,43 @@ const setupLanguageTranslationCommands = () => {
   };
 };
 setupLanguageTranslationCommands();
+
+const setupEmailComposeCommands = () => {
+  const curryExec = (language: string) => async (args?: string[]) => {
+    if (!args || !args[0]) return "no message provided";
+    const message = args.join(" ");
+    if (!message) return "no message provided";
+
+    const result = await retry(
+      () => {
+        return getLLMResponse({
+          systemMessage: getEmailComposeLanguageSystemMessage(language),
+          userMessage: message,
+          schema: z.object({
+            email: z.string(),
+          }),
+        });
+      },
+      3,
+      false
+    );
+
+    return result.email;
+  };
+
+  const cmds = LANGUAGES.reduce(
+    (acc, language) => {
+      acc[`compose_${language}`] = [curryExec(language), "message: string"];
+      return acc;
+    },
+    {} as Record<string, [ReturnType<typeof curryExec>, string]>
+  );
+
+  execsPerCategory.email = {
+    ...execsPerCategory.email,
+    ...cmds,
+  };
+};
+setupEmailComposeCommands();
 
 export const execs = flattenObjectDot(execsPerCategory);

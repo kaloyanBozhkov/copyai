@@ -29,5 +29,6 @@ export const getAnimeSystemMessage = async (items: string) => {
    
 <important>
 - Respond with ONLY the item index in the list { index: number }, no additional text or explanations.
+- If no results in search or no torrent matches search query return { index: -1 } 
 </important>`
 }
