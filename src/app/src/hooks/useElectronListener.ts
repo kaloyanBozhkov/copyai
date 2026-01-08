@@ -6,7 +6,7 @@ import type { Route } from "../store/useRouteStore";
 type EventPayloads = {
   "autocomplete-result": { key: string; args: string[]; isTabPress: boolean };
   "app-init": { route: Route; isDevMode: boolean };
-  "command-processing-completed": void;
+  "command-processing-completed": { success: boolean };
 };
 
 type EventName = keyof EventPayloads;

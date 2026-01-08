@@ -22,7 +22,7 @@ export type AppInitPayload = {
 export type IPCActions = {
   "autocomplete-result": AutocompleteResultPayload;
   "app-init": AppInitPayload;
-  "command-processing-completed": void;
+  "command-processing-completed": { success: boolean };
 };
 /**
  * send event to SPA

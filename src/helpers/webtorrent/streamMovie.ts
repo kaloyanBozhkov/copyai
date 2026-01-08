@@ -10,6 +10,7 @@ import {
   removeActiveProcess,
   updateActiveProcess,
 } from "../../electron/tray";
+import { applyFileSelection } from "./selectTorrentFiles";
 
 export interface StreamProcess {
   id: string;
@@ -309,9 +310,11 @@ const buildVideoPlayerHTML = (videoUrl: string, videoName: string): string => {
 export const streamMovie = async ({
   magnetLinkUrl,
   downloadPath,
+  searchQuery,
 }: {
   magnetLinkUrl: string;
   downloadPath: string;
+  searchQuery: string;
 }) => {
   // Kill previous stream if exists
   if (activeServer) {
@@ -333,7 +336,7 @@ export const streamMovie = async ({
         console.error('WebTorrent client error:', err);
       });
 
-      client.add(magnetLinkUrl, { path: downloadPath }, (torrent: any) => {
+      client.add(magnetLinkUrl, { path: downloadPath }, async (torrent: any) => {
         console.log(`Starting stream: ${torrent.name}`);
 
         // Add error handler for torrent
@@ -341,16 +344,10 @@ export const streamMovie = async ({
           console.error('Torrent error:', err);
         });
 
-        // Find the largest file (the movie file)
-        const movieFile = torrent.files.reduce((largest: any, file: any) =>
-          file.length > largest.length ? file : largest
-        );
-
-        // Deselect all files first
-        torrent.files.forEach((file: any) => file.deselect());
-
-        // Select only the movie file with high priority for streaming
-        movieFile.select(0); // Priority 0 = highest priority for sequential download
+        // Use AI to select the right files based on search query (prioritize for streaming)
+        const movieFile = await applyFileSelection(torrent.files, searchQuery, {
+          prioritize: true,
+        });
 
         const movieFolderPath = path.join(downloadPath, torrent.name);
 

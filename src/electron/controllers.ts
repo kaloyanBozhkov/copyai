@@ -25,8 +25,8 @@ export const showInputWindowListener = async (isDevMode = false) => {
   });
 
   const onCompletedProcessing = await showProcessingCommandView();
-  await cmdKitchen(cmdAccessor, args);
-  onCompletedProcessing();
+  const success = await cmdKitchen(cmdAccessor, args);
+  onCompletedProcessing(success !== false);
 };
 
 export const closeActiveWindowListener = () => {

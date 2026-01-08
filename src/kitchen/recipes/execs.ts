@@ -35,6 +35,7 @@ import path from "path";
 import os from "os";
 import { downloadMovie } from "../../helpers/webtorrent/downloadMovie";
 import { streamMovie } from "../../helpers/webtorrent/streamMovie";
+import { parseSearchQuery } from "../../helpers/webtorrent/parseSearchQuery";
 
 export const execsPerCategory: Record<
   string,
@@ -359,24 +360,26 @@ export const execsPerCategory: Record<
   movie: {
     stream: [
       async (args?: string[]) => {
-        if (!args || !args[0]) return "no movie title provided";
+        if (!args || !args[0]) return null;
         const text = args.join(" ");
-        if (!text) return "no movie title provided";
+        if (!text) return null;
 
-        const link = await getPiratebaySearchLink(text);
+        const { searchText } = parseSearchQuery(text);
+        console.log("searching torrent for ", searchText);
+        const link = await getPiratebaySearchLink(searchText);
         const {
           elementsHTML: selectedItemsElementsHTML,
           text: selectedItemsHTML,
         } = await getPageHTMLWithJS({
           url: link,
           selector: "ol li",
-          limit: 10,
+          limit: 20,
           skip: 1,
           returnOuterHTML: true,
         });
 
         if (selectedItemsHTML.length === 0) {
-          return "No torrents found for this movie";
+          return null;
         }
 
         const { index } = await retry(
@@ -395,20 +398,24 @@ export const execsPerCategory: Record<
 
         const selectedItem = selectedItemsElementsHTML[index];
         if (!selectedItem) {
-          return `Invalid index ${index} returned. Available items: ${selectedItemsElementsHTML.length}`;
+          return null;
+        }
+
+        if (selectedItem.indexOf("00000000000000") !== -1) {
+          return null;
         }
 
         const magnetLink = parse(selectedItem).querySelector(
           'a[href^="magnet:?"]'
         );
-        if (!magnetLink) return "no magnet link found";
+        if (!magnetLink) return null;
         const magnetLinkUrl = magnetLink.getAttribute("href");
-        if (!magnetLinkUrl) return "no magnet link URL found";
+        if (!magnetLinkUrl) return null;
 
         // stream the torrent (non-blocking)
         const downloadPath = path.join(os.homedir(), "Downloads", "movies");
 
-        await streamMovie({ magnetLinkUrl, downloadPath });
+        await streamMovie({ magnetLinkUrl, downloadPath, searchQuery: text });
 
         return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
       },
@@ -416,11 +423,12 @@ export const execsPerCategory: Record<
     ],
     download: [
       async (args?: string[]) => {
-        if (!args || !args[0]) return "no movie title provided";
+        if (!args || !args[0]) return null;
         const text = args.join(" ");
-        if (!text) return "no movie title provided";
+        if (!text) return null;
 
-        const link = await getPiratebaySearchLink(text);
+        const { searchText } = parseSearchQuery(text);
+        const link = await getPiratebaySearchLink(searchText);
         const {
           elementsHTML: selectedItemsElementsHTML,
           text: selectedItemsHTML,
@@ -433,7 +441,7 @@ export const execsPerCategory: Record<
         });
 
         if (selectedItemsHTML.length === 0) {
-          return "No torrents found for this movie";
+          return null;
         }
 
         const { index } = await retry(
@@ -452,21 +460,25 @@ export const execsPerCategory: Record<
 
         const selectedItem = selectedItemsElementsHTML[index];
         if (!selectedItem) {
-          return `Invalid index ${index} returned. Available items: ${selectedItemsElementsHTML.length}`;
+          return null;
+        }
+
+        if (selectedItem.indexOf("00000000000000") !== -1) {
+          return null;
         }
         console.log("selectedItem", selectedItem.outerHTML);
 
         const magnetLink = parse(selectedItem).querySelector(
           'a[href^="magnet:?"]'
         );
-        if (!magnetLink) return "no magnet link found";
+        if (!magnetLink) return null;
         const magnetLinkUrl = magnetLink.getAttribute("href");
-        if (!magnetLinkUrl) return "no magnet link URL found";
+        if (!magnetLinkUrl) return null;
 
         // download the torrent (non-blocking)
         const downloadPath = path.join(os.homedir(), "Downloads", "movies");
 
-        downloadMovie({ magnetLinkUrl, downloadPath });
+        downloadMovie({ magnetLinkUrl, downloadPath, searchQuery: text });
 
         // Open Finder at downloads folder immediately
         exec(`open "${downloadPath}"`);
@@ -479,9 +491,9 @@ export const execsPerCategory: Record<
   anime: {
     stream: [
       async (args?: string[]) => {
-        if (!args || !args[0]) return "no anime title provided";
+        if (!args || !args[0]) return null;
         const text = args.join(" ");
-        if (!text) return "no anime title provided";
+        if (!text) return null;
 
         const link = await getAnimeSearchLink(text);
         const {
@@ -496,7 +508,7 @@ export const execsPerCategory: Record<
         });
 
         if (selectedItemsHTML.length === 0) {
-          return "No torrents found for this anime";
+          return null;
         }
 
         const { index } = await retry(
@@ -515,20 +527,20 @@ export const execsPerCategory: Record<
 
         const selectedItem = selectedItemsElementsHTML[index];
         if (!selectedItem) {
-          return `Invalid index ${index} returned. Available items: ${selectedItemsElementsHTML.length}`;
+          return null;
         }
 
         const magnetLink = parse(selectedItem).querySelector(
           'a[href^="magnet:?"]'
         );
-        if (!magnetLink) return "no magnet link found";
+        if (!magnetLink) return null;
         const magnetLinkUrl = magnetLink.getAttribute("href");
-        if (!magnetLinkUrl) return "no magnet link URL found";
+        if (!magnetLinkUrl) return null;
 
         // stream the torrent (non-blocking)
         const downloadPath = path.join(os.homedir(), "Downloads", "anime");
 
-        streamMovie({ magnetLinkUrl, downloadPath });
+        streamMovie({ magnetLinkUrl, downloadPath, searchQuery: text });
 
         return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
       },
@@ -536,9 +548,9 @@ export const execsPerCategory: Record<
     ],
     download: [
       async (args?: string[]) => {
-        if (!args || !args[0]) return "no anime title provided";
+        if (!args || !args[0]) return null;
         const text = args.join(" ");
-        if (!text) return "no anime title provided";
+        if (!text) return null;
 
         const link = await getAnimeSearchLink(text);
         const {
@@ -553,7 +565,7 @@ export const execsPerCategory: Record<
         });
 
         if (selectedItemsHTML.length === 0) {
-          return "No torrents found for this movie";
+          return null;
         }
 
         const { index } = await retry(
@@ -572,21 +584,21 @@ export const execsPerCategory: Record<
 
         const selectedItem = selectedItemsElementsHTML[index];
         if (!selectedItem) {
-          return `Invalid index ${index} returned. Available items: ${selectedItemsElementsHTML.length}`;
+          return null;
         }
         console.log("selectedItem", selectedItem.outerHTML);
 
         const magnetLink = parse(selectedItem).querySelector(
           'a[href^="magnet:?"]'
         );
-        if (!magnetLink) return "no magnet link found";
+        if (!magnetLink) return null;
         const magnetLinkUrl = magnetLink.getAttribute("href");
-        if (!magnetLinkUrl) return "no magnet link URL found";
+        if (!magnetLinkUrl) return null;
 
         // download the torrent (non-blocking)
         const downloadPath = path.join(os.homedir(), "Downloads", "movies");
 
-        downloadMovie({ magnetLinkUrl, downloadPath });
+        downloadMovie({ magnetLinkUrl, downloadPath, searchQuery: text });
 
         // Open Finder at downloads folder immediately
         exec(`open "${downloadPath}"`);

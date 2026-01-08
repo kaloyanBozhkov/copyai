@@ -8,6 +8,7 @@ import {
   removeActiveProcess,
   updateActiveProcess,
 } from "../../electron/tray";
+import { applyFileSelection } from "./selectTorrentFiles";
 
 export interface DownloadProcess {
   id: string;
@@ -67,9 +68,11 @@ export const downloadProcessUI = {
 export const downloadMovie = async ({
   magnetLinkUrl,
   downloadPath,
+  searchQuery,
 }: {
   magnetLinkUrl: string;
   downloadPath: string;
+  searchQuery: string;
 }) => {
   const processId = uuidv4();
   // Dynamic import for ESM module (using eval to prevent TS from compiling to require)
@@ -78,20 +81,11 @@ export const downloadMovie = async ({
       const WebTorrent = WebTorrentModule.default;
       const client = new WebTorrent();
 
-      client.add(magnetLinkUrl, { path: downloadPath }, (torrent: any) => {
+      client.add(magnetLinkUrl, { path: downloadPath }, async (torrent: any) => {
         console.log(`Starting download: ${torrent.name}`);
 
-        // Find the largest file (the movie file)
-        const movieFile = torrent.files.reduce((largest: any, file: any) =>
-          file.length > largest.length ? file : largest
-        );
-
-        // Deselect all files first
-        torrent.files.forEach((file: any) => file.deselect());
-
-        // Select only the movie file
-        movieFile.select();
-
+        // Use AI to select the right files based on search query
+        const movieFile = await applyFileSelection(torrent.files, searchQuery);
         const movieFolderPath = path.join(downloadPath, torrent.name);
 
         // Add process to tray

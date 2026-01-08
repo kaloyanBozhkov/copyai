@@ -2,7 +2,7 @@ import { BrowserWindow } from "electron";
 import { browserWindowOptions, initActiveWindow } from "./common";
 import { sendToActiveWindow } from "../electron/actions";
 
-type UnmountCallback = () => void;
+type UnmountCallback = (success: boolean) => void;
 
 export async function showProcessingCommandView(
   isDevMode = false
@@ -24,7 +24,7 @@ export async function showProcessingCommandView(
     },
   });
 
-  return () => {
-    sendToActiveWindow("command-processing-completed", void 0);
+  return (success: boolean) => {
+    sendToActiveWindow("command-processing-completed", { success });
   };
 }
