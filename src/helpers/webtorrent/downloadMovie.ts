@@ -83,21 +83,28 @@ export const downloadMovie = async ({
 
       client.add(
         magnetLinkUrl,
-        { path: downloadPath },
+        {
+          path: downloadPath,
+          // do not select any files to download first
+          deselect: true,
+        },
         async (torrent: any) => {
           console.log(`Starting download: ${torrent.name}`);
 
           // Use AI to select the right files based on search query
-          const torrentFiles = await applyFileSelection(torrent, searchQuery);
+          const { primaryFile, selectedFiles } = await applyFileSelection(
+            torrent,
+            searchQuery
+          );
           const movieFolderPath = path.join(downloadPath, torrent.name);
 
           addActiveProcess({
             id: processId,
             type: "download",
             name:
-              torrentFiles.length > 1
-                ? `${searchQuery} - ${torrentFiles.length} files`
-                : torrentFiles[0].name,
+              selectedFiles.length > 1
+                ? `${searchQuery} - ${selectedFiles.length} files`
+                : primaryFile?.name ?? searchQuery,
             progress: 0,
             downloadSpeed: 0,
             uploadSpeed: 0,
@@ -117,7 +124,7 @@ export const downloadMovie = async ({
           } as DownloadProcess);
 
           torrent.on("done", () => {
-            console.log(`Download complete: ${torrentFiles.length} files`);
+            console.log(`Download complete: ${selectedFiles.length} files`);
             // Remove from tray
             removeActiveProcess(processId);
             // Open Finder at the movie folder when done

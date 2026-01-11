@@ -111,8 +111,8 @@ export const applyFileSelection = async (
   torrent: any,
   searchQuery: string,
   options: { prioritize?: boolean } = {}
-): Promise<any> => {
-  // deselect all https://github.com/webtorrent/webtorrent/pull/2757
+): Promise<{ primaryFile: any; selectedFiles: any[] }> => {
+  // deselect all - should already have deselected on client.add(,opts...)
   torrent.deselect(0, torrent.pieces.length - 1);
 
   const torrentFiles = torrent.files;
@@ -137,6 +137,15 @@ export const applyFileSelection = async (
 
   console.log("Files selected for download:", selectedForDownload);
 
-  // Return primary movie file from original refs
-  return torrentFiles;
+  // Get selected files from torrent refs
+  const selectedFiles = torrentFiles.filter(
+    (file: any) => videoNames.has(file.name) || subtitleNames.has(file.name)
+  );
+
+  // Primary file is the first video file
+  const primaryFile = torrentFiles.find((file: any) =>
+    videoNames.has(file.name)
+  );
+
+  return { primaryFile, selectedFiles };
 };
