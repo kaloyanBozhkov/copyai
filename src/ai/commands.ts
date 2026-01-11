@@ -3,6 +3,7 @@ export const getMovieSystemMessage = async (items: string) => {
 <instructions>
 - You receive a list of movies, in html format
 - You must choose the best torrent for the user based on what they searched for and the quality and seeds.
+- If you are choosing a 1080p torrent, choose based on most seeders. For higher resolutions, choose based on highest quality + search query + size + peers.
 - You must return the item index in the list.
 - User will provide the search query
 - If the user search query includes a year or a resolution flag like 4k, 1080p, 720p, 480p, etc. you must choose the torrent that matches the year and/or resolution.
@@ -50,6 +51,7 @@ export const getFileSelectionSystemMessage = (
   - If no specific episode mentioned, select all episodes of the season
   - Consider file size - video files are usually the largest
   - Ignore sample files, trailers, or extras unless specifically requested
+  - Include subtitle files for the episodes selected if they are available
   </instructions>
   
   <important>

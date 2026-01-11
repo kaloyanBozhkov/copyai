@@ -345,7 +345,7 @@ export const streamMovie = async ({
         });
 
         // Use AI to select the right files based on search query (prioritize for streaming)
-        const movieFile = await applyFileSelection(torrent.files, searchQuery, {
+        const movieFile = await applyFileSelection(torrent, searchQuery, {
           prioritize: true,
         });
 

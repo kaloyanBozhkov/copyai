@@ -34,6 +34,7 @@ import {
 import path from "path";
 import os from "os";
 import { downloadMovie } from "../../helpers/webtorrent/downloadMovie";
+import { startTransferServer } from "../../helpers/transfer/transferServer";
 import { streamMovie } from "../../helpers/webtorrent/streamMovie";
 import { parseSearchQuery } from "../../helpers/webtorrent/parseSearchQuery";
 
@@ -607,6 +608,9 @@ export const execsPerCategory: Record<
       },
       "title: string, S_E_: string",
     ],
+  },
+  transfer: {
+    server: [async () => startTransferServer()],
   },
 };
 

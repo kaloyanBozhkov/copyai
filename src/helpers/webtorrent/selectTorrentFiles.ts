@@ -52,8 +52,10 @@ export const selectTorrentFiles = async (
     return { videoFiles: [largest], subtitleFiles };
   }
 
+  const allFilesToChooseFrom = [...videoFiles, ...subtitleFiles];
+
   // Prepare file list for AI
-  const filesForAI = videoFiles.map((f, index) => ({
+  const filesForAI = allFilesToChooseFrom.map((f, index) => ({
     index,
     name: f.name,
     size: formatFileSize(f.length),
@@ -76,16 +78,20 @@ export const selectTorrentFiles = async (
       false
     );
 
-    const selectedVideos = indexes
-      .filter((i) => i >= 0 && i < videoFiles.length)
-      .map((i) => videoFiles[i]);
+    const selectedFiles = indexes
+      .filter((i) => i >= 0 && i < allFilesToChooseFrom.length)
+      .map((i) => allFilesToChooseFrom[i]);
+
+    // Separate back into video and subtitle files
+    const selectedVideos = selectedFiles.filter((f) => isVideoFile(f.name));
+    const selectedSubs = selectedFiles.filter((f) => isSubtitleFile(f.name));
 
     console.log(
-      "selectedVideos",
-      selectedVideos.map((v) => v.name)
+      "AI selected files:",
+      selectedFiles.map((v) => v.name)
     );
 
-    // If AI returned nothing valid, fallback to largest
+    // If AI returned nothing valid, fallback to largest and all subs
     if (selectedVideos.length === 0) {
       const largest = videoFiles.reduce((a, b) =>
         a.length > b.length ? a : b
@@ -93,7 +99,7 @@ export const selectTorrentFiles = async (
       return { videoFiles: [largest], subtitleFiles };
     }
 
-    return { videoFiles: selectedVideos, subtitleFiles };
+    return { videoFiles: selectedVideos, subtitleFiles: selectedSubs };
   } catch (error) {
     console.error("AI file selection failed, using largest file:", error);
     const largest = videoFiles.reduce((a, b) => (a.length > b.length ? a : b));
@@ -102,10 +108,15 @@ export const selectTorrentFiles = async (
 };
 
 export const applyFileSelection = async (
-  torrentFiles: any[],
+  torrent: any,
   searchQuery: string,
   options: { prioritize?: boolean } = {}
 ): Promise<any> => {
+  // deselect all https://github.com/webtorrent/webtorrent/pull/2757
+  torrent.deselect(0, torrent.pieces.length - 1);
+
+  const torrentFiles = torrent.files;
+
   const { videoFiles, subtitleFiles } = await selectTorrentFiles(
     torrentFiles,
     searchQuery
@@ -114,16 +125,18 @@ export const applyFileSelection = async (
   const videoNames = new Set(videoFiles.map((f) => f.name));
   const subtitleNames = new Set(subtitleFiles.map((f) => f.name));
 
-  // Deselect all, then select matched files using original torrent.files refs
+  const selectedForDownload: string[] = [];
+
+  // Select only matched files
   torrentFiles.forEach((file: any) => {
-    file.deselect();
-    if (videoNames.has(file.name)) {
+    if (videoNames.has(file.name) || subtitleNames.has(file.name)) {
       options.prioritize ? file.select(0) : file.select();
-    } else if (subtitleNames.has(file.name)) {
-      file.select();
+      selectedForDownload.push(file.name);
     }
   });
 
+  console.log("Files selected for download:", selectedForDownload);
+
   // Return primary movie file from original refs
-  return torrentFiles.find((f: any) => f.name === videoFiles[0]?.name);
+  return torrentFiles;
 };

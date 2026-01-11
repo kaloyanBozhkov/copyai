@@ -81,70 +81,76 @@ export const downloadMovie = async ({
       const WebTorrent = WebTorrentModule.default;
       const client = new WebTorrent();
 
-      client.add(magnetLinkUrl, { path: downloadPath }, async (torrent: any) => {
-        console.log(`Starting download: ${torrent.name}`);
+      client.add(
+        magnetLinkUrl,
+        { path: downloadPath },
+        async (torrent: any) => {
+          console.log(`Starting download: ${torrent.name}`);
 
-        // Use AI to select the right files based on search query
-        const movieFile = await applyFileSelection(torrent.files, searchQuery);
-        const movieFolderPath = path.join(downloadPath, torrent.name);
+          // Use AI to select the right files based on search query
+          const torrentFiles = await applyFileSelection(torrent, searchQuery);
+          const movieFolderPath = path.join(downloadPath, torrent.name);
 
-        // Add process to tray
-        addActiveProcess({
-          id: processId,
-          type: "download",
-          name: movieFile.name,
-          progress: 0,
-          downloadSpeed: 0,
-          uploadSpeed: 0,
-          peers: 0,
-          downloadPath,
-          torrentName: torrent.name,
-          cleanup: () => {
-            try {
-              clearInterval(progressInterval);
-              if (client && !client.destroyed) {
-                client.destroy();
+          addActiveProcess({
+            id: processId,
+            type: "download",
+            name:
+              torrentFiles.length > 1
+                ? `${searchQuery} - ${torrentFiles.length} files`
+                : torrentFiles[0].name,
+            progress: 0,
+            downloadSpeed: 0,
+            uploadSpeed: 0,
+            peers: 0,
+            downloadPath,
+            torrentName: torrent.name,
+            cleanup: () => {
+              try {
+                clearInterval(progressInterval);
+                if (client && !client.destroyed) {
+                  client.destroy();
+                }
+              } catch (error) {
+                console.error("Error during download cleanup:", error);
               }
-            } catch (error) {
-              console.error("Error during download cleanup:", error);
-            }
-          },
-        } as DownloadProcess);
+            },
+          } as DownloadProcess);
 
-        torrent.on("done", () => {
-          console.log(`Download complete: ${movieFile.name}`);
-          // Remove from tray
-          removeActiveProcess(processId);
-          // Open Finder at the movie folder when done
-          exec(`open "${movieFolderPath}"`, (error) => {
-            if (error) {
-              console.error("Error opening Finder:", error);
-            }
-            client.destroy();
-          });
-        });
-
-        // Show progress
-        const progressInterval = setInterval(() => {
-          console.log(`Progress: ${(torrent.progress * 100).toFixed(1)}%`);
-          console.log(
-            `Download speed: ${(torrent.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s`
-          );
-          console.log(`Peers: ${torrent.numPeers}`);
-
-          // Update tray
-          updateActiveProcess(processId, {
-            progress: torrent.progress,
-            downloadSpeed: torrent.downloadSpeed,
-            uploadSpeed: torrent.uploadSpeed,
-            peers: torrent.numPeers,
+          torrent.on("done", () => {
+            console.log(`Download complete: ${torrentFiles.length} files`);
+            // Remove from tray
+            removeActiveProcess(processId);
+            // Open Finder at the movie folder when done
+            exec(`open "${movieFolderPath}"`, (error) => {
+              if (error) {
+                console.error("Error opening Finder:", error);
+              }
+              client.destroy();
+            });
           });
 
-          if (torrent.done) {
-            clearInterval(progressInterval);
-          }
-        }, 5000);
-      });
+          // Show progress
+          const progressInterval = setInterval(() => {
+            console.log(`Progress: ${(torrent.progress * 100).toFixed(1)}%`);
+            console.log(
+              `Download speed: ${(torrent.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s`
+            );
+            console.log(`Peers: ${torrent.numPeers}`);
+
+            // Update tray
+            updateActiveProcess(processId, {
+              progress: torrent.progress,
+              downloadSpeed: torrent.downloadSpeed,
+              uploadSpeed: torrent.uploadSpeed,
+              peers: torrent.numPeers,
+            });
+
+            if (torrent.done) {
+              clearInterval(progressInterval);
+            }
+          }, 5000);
+        }
+      );
     })
     .catch((error) => {
       console.error("Error loading webtorrent:", error);
