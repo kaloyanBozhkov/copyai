@@ -11,6 +11,11 @@ import {
   updateActiveProcess,
 } from "../../electron/tray";
 import { applyFileSelection } from "./selectTorrentFiles";
+import { downloadMovieSubs } from "../subs/downloadSubs";
+import {
+  convertSrtFileToVtt,
+  getSubtitlesFromDirectory,
+} from "../subs/convertSrt";
 
 export interface StreamProcess {
   id: string;
@@ -83,65 +88,6 @@ let activeServer: {
   processId: string;
 } | null = null;
 
-const extractSubtitles = (movieFile: any, movieFolderPath: string) => {
-  const moviePath = path.join(movieFolderPath, movieFile.name);
-
-  console.log(`Checking for subtitles in: ${moviePath}`);
-
-  // First, probe the file to find subtitle streams
-  exec(
-    `ffprobe -v error -select_streams s -show_entries stream=index:stream_tags=language -of json "${moviePath}"`,
-    (error, stdout, stderr) => {
-      if (error) {
-        console.log("No subtitles found or ffprobe not available");
-        return;
-      }
-
-      try {
-        const probeData = JSON.parse(stdout);
-        const subtitleStreams = probeData.streams || [];
-
-        if (subtitleStreams.length === 0) {
-          console.log("No embedded subtitles found");
-          return;
-        }
-
-        console.log(`Found ${subtitleStreams.length} subtitle stream(s)`);
-
-        // Extract each subtitle stream
-        subtitleStreams.forEach((stream: any, idx: number) => {
-          const language = stream.tags?.language || `track${idx}`;
-          const streamIndex = stream.index;
-          const baseName = path.basename(
-            movieFile.name,
-            path.extname(movieFile.name)
-          );
-          const subtitlePath = path.join(
-            movieFolderPath,
-            `${baseName}.${language}.srt`
-          );
-
-          exec(
-            `ffmpeg -i "${moviePath}" -map 0:${streamIndex} -c:s srt "${subtitlePath}" -y`,
-            (extractError) => {
-              if (extractError) {
-                console.error(
-                  `Failed to extract subtitle ${language}:`,
-                  extractError.message
-                );
-                return;
-              }
-              console.log(`Extracted subtitle: ${subtitlePath}`);
-            }
-          );
-        });
-      } catch (parseError) {
-        console.error("Failed to parse ffprobe output:", parseError);
-      }
-    }
-  );
-};
-
 const buildVideoPlayerHTML = (videoUrl: string, videoName: string): string => {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -183,10 +129,31 @@ const buildVideoPlayerHTML = (videoUrl: string, videoName: string): string => {
       z-index: 10000;
       display: none;
     }
+    .video-title-overlay {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: 500;
+      z-index: 9999;
+      max-width: 80%;
+      text-align: center;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+    .video-title-overlay.hidden {
+      opacity: 0;
+    }
   </style>
 </head>
 <body>
   <div class="error-log" id="error-log"></div>
+  <div class="video-title-overlay" id="video-title">${videoName}</div>
   <div class="video-container">
     <video
       id="video-player"
@@ -296,6 +263,30 @@ const buildVideoPlayerHTML = (videoUrl: string, videoName: string): string => {
     checkForSubtitles();
     setInterval(checkForSubtitles, 5000);
     
+    // Video title overlay control
+    const videoTitle = document.getElementById('video-title');
+    let titleTimeout = null;
+    
+    function showVideoTitle() {
+      if (videoTitle) {
+        videoTitle.classList.remove('hidden');
+        clearTimeout(titleTimeout);
+        titleTimeout = setTimeout(function() {
+          videoTitle.classList.add('hidden');
+        }, 3000);
+      }
+    }
+    
+    // Show title initially
+    showVideoTitle();
+    
+    // Show title on mouse move
+    document.addEventListener('mousemove', showVideoTitle);
+    
+    // Show title on player interaction
+    player.on('play', showVideoTitle);
+    player.on('pause', showVideoTitle);
+    
     // Try to play after a short delay
     setTimeout(function() {
       player.play().catch(function(err) {
@@ -318,9 +309,17 @@ export const streamMovie = async ({
 }) => {
   // Kill previous stream if exists
   if (activeServer) {
-    console.log("Killing previous stream...");
+    console.log("Killing previous stream and WebTorrent client...");
     removeActiveProcess(activeServer.processId);
-    activeServer.cleanup();
+    try {
+      activeServer.cleanup();
+      // Force destroy client if still alive
+      if (activeServer?.client && !activeServer?.client?.destroyed) {
+        activeServer.client.destroy();
+      }
+    } catch (e) {
+      console.error("Error cleaning up previous stream:", e);
+    }
     activeServer = null;
   }
 
@@ -394,6 +393,42 @@ export const streamMovie = async ({
           let downloadComplete = false;
           let lastConnectionCloseTime: number | null = null;
           let idleCheckInterval: NodeJS.Timeout | null = null;
+          let subtitlesFetched = false;
+
+          // Fetch subtitles from OpenSubtitles (once per stream)
+          const fetchOpenSubtitles = async () => {
+            console.log("Fetching subtitles from OpenSubtitles...");
+            if (subtitlesFetched) {
+              console.log("Subtitles already fetched");
+              return;
+            }
+            subtitlesFetched = true;
+
+            console.log("Fetching subtitles from OpenSubtitles...");
+
+            try {
+              const result = await downloadMovieSubs(searchQuery, {
+                fileName: movieFile.name,
+                destFolder: movieFolderPath,
+              });
+
+              if (result.success) {
+                if (result.alreadyExists) {
+                  console.log(
+                    `Subtitles already cached: ${result.paths?.join(", ")}`
+                  );
+                } else {
+                  console.log(
+                    `Subtitles downloaded: ${result.paths?.join(", ")}`
+                  );
+                }
+              } else {
+                console.log(`No subtitles found: ${result.error}`);
+              }
+            } catch (error) {
+              console.error("Failed to fetch OpenSubtitles:", error);
+            }
+          };
 
           const checkAndCleanup = () => {
             // Only cleanup if download is complete AND no active connections AND 5 minutes have passed
@@ -491,6 +526,9 @@ export const streamMovie = async ({
 
             // Serve HTML player at root path
             if (req.url === "/" || req.url === "") {
+              // Trigger subtitle fetch on first page load (non-blocking)
+              fetchOpenSubtitles();
+
               // Use relative URL so it works from any IP/hostname
               const videoUrl = "/video";
               res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -504,28 +542,12 @@ export const streamMovie = async ({
               res.setHeader("Content-Type", "application/json");
               res.writeHead(200);
 
-              try {
-                const files = fs.readdirSync(movieFolderPath);
-                const subtitles = files
-                  .filter((f) => f.endsWith(".srt"))
-                  .map((f) => {
-                    const match = f.match(/\.([a-z]{2,3})\.srt$/i);
-                    const language = match ? match[1] : "unknown";
-                    return {
-                      filename: f,
-                      url: `/subtitles/${encodeURIComponent(f)}`,
-                      language: language,
-                      label: language.toUpperCase(),
-                    };
-                  });
-                res.end(JSON.stringify({ subtitles }));
-              } catch (err) {
-                res.end(JSON.stringify({ subtitles: [] }));
-              }
+              const subtitles = getSubtitlesFromDirectory(movieFolderPath);
+              res.end(JSON.stringify({ subtitles }));
               return;
             }
 
-            // Serve subtitle files
+            // Serve subtitle files (convert SRT to VTT)
             if (req.url?.startsWith("/subtitles/")) {
               const filename = decodeURIComponent(
                 req.url.replace("/subtitles/", "")
@@ -533,9 +555,16 @@ export const streamMovie = async ({
               const subtitlePath = path.join(movieFolderPath, filename);
 
               if (fs.existsSync(subtitlePath) && filename.endsWith(".srt")) {
-                res.setHeader("Content-Type", "text/plain; charset=utf-8");
-                res.writeHead(200);
-                fs.createReadStream(subtitlePath).pipe(res);
+                try {
+                  const vttContent = convertSrtFileToVtt(subtitlePath);
+                  res.setHeader("Content-Type", "text/vtt; charset=utf-8");
+                  res.writeHead(200);
+                  res.end(vttContent);
+                } catch (err) {
+                  console.error("Error converting subtitle:", err);
+                  res.writeHead(500);
+                  res.end("Error processing subtitle");
+                }
               } else {
                 res.writeHead(404);
                 res.end("Subtitle not found");
@@ -730,7 +759,7 @@ export const streamMovie = async ({
 
             // Extract subtitles from movie file if any exist
             console.log("Starting subtitle extraction...");
-            extractSubtitles(movieFile, movieFolderPath);
+            // extractSubtitles(movieFile, movieFolderPath);
 
             // Start checking every minute for idle timeout
             idleCheckInterval = setInterval(checkAndCleanup, 60 * 1000);

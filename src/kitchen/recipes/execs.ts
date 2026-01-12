@@ -37,6 +37,12 @@ import { downloadMovie } from "../../helpers/webtorrent/downloadMovie";
 import { startTransferServer } from "../../helpers/transfer/transferServer";
 import { streamMovie } from "../../helpers/webtorrent/streamMovie";
 import { parseSearchQuery } from "../../helpers/webtorrent/parseSearchQuery";
+import { downloadMovieSubs } from "../../helpers/subs/downloadSubs";
+import {
+  buildSearchUrl,
+  scrapeSubtitleResults,
+  formatResultsForLLM,
+} from "../../helpers/subs/opensubtitles";
 
 export const execsPerCategory: Record<
   string,
@@ -488,6 +494,26 @@ export const execsPerCategory: Record<
       },
       "title: string, year?: number",
     ],
+    subs: [
+      async (args?: string[]) => {
+        if (!args || !args[0]) return "no movie title provided";
+        const text = args.join(" ");
+        if (!text) return "no movie title provided";
+
+        const result = await downloadMovieSubs(text);
+
+        if (result.alreadyExists) {
+          return `Subtitle already exists: ${result.paths?.join(", ")}`;
+        }
+
+        if (!result.success) {
+          return `Failed to download subtitle: ${result.error}`;
+        }
+
+        return `Subtitle downloaded: ${result.paths?.join(", ")}`;
+      },
+      "title: string",
+    ],
   },
   anime: {
     stream: [
@@ -612,7 +638,13 @@ export const execsPerCategory: Record<
   transfer: {
     server: [async () => startTransferServer()],
   },
+  development: {},
 };
+
+// Remove development commands in production
+if (process.env.NODE_ENV !== "development") {
+  delete execsPerCategory.development;
+}
 
 const LANGUAGES = [
   "italian",
