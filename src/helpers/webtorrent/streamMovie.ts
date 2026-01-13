@@ -11,11 +11,12 @@ import {
   updateActiveProcess,
 } from "../../electron/tray";
 import { applyFileSelection } from "./selectTorrentFiles";
-import { downloadMovieSubs } from "../subs/downloadSubs";
+import { downloadMovieSubs, downloadAnimeSubs } from "../subs/downloadSubs";
 import {
   convertSrtFileToVtt,
   getSubtitlesFromDirectory,
 } from "../subs/convertSrt";
+import { SupportedLanguage } from "../subs/opensubtitles";
 
 export interface StreamProcess {
   id: string;
@@ -67,10 +68,10 @@ export const streamProcessUI = {
     console.log(`Force terminating stream: ${streamProcess.name}`);
 
     // Clean up the download folder immediately
-    const movieFolderPath = path.join(
-      streamProcess.downloadPath,
-      streamProcess.torrentName
-    );
+    // If torrentName is empty, the torrent was a single file, so clean the entire downloadPath
+    const movieFolderPath = streamProcess.torrentName
+      ? path.join(streamProcess.downloadPath, streamProcess.torrentName)
+      : streamProcess.downloadPath;
 
     if (fs.existsSync(movieFolderPath)) {
       console.log(`Cleaning up stream folder: ${movieFolderPath}`);
@@ -302,10 +303,14 @@ export const streamMovie = async ({
   magnetLinkUrl,
   downloadPath,
   searchQuery,
+  subsLanguage = "eng",
+  isAnime = false,
 }: {
   magnetLinkUrl: string;
   downloadPath: string;
   searchQuery: string;
+  subsLanguage?: SupportedLanguage;
+  isAnime?: boolean;
 }) => {
   // Kill previous stream if exists
   if (activeServer) {
@@ -323,6 +328,18 @@ export const streamMovie = async ({
     activeServer = null;
   }
 
+  // Create a sanitized folder name from search query
+  const sanitizedSearchQuery = searchQuery
+    .replace(/[^a-zA-Z0-9\s]/g, "")
+    .replace(/\s+/g, ".")
+    .substring(0, 100);
+
+  // Create parent folder for this search query
+  const searchQueryFolder = path.join(downloadPath, sanitizedSearchQuery);
+  if (!fs.existsSync(searchQueryFolder)) {
+    fs.mkdirSync(searchQueryFolder, { recursive: true });
+  }
+
   const processId = uuidv4();
   // Dynamic import for ESM module (using eval to prevent TS from compiling to require)
   (eval('import("webtorrent")') as Promise<any>)
@@ -338,7 +355,7 @@ export const streamMovie = async ({
       client.add(
         magnetLinkUrl,
         {
-          path: downloadPath,
+          path: searchQueryFolder,
           // do not select any files to download first
           deselect: true,
         },
@@ -357,7 +374,15 @@ export const streamMovie = async ({
             { prioritize: true }
           );
 
-          const movieFolderPath = path.join(downloadPath, torrent.name);
+          // Check if torrent.name is a file (has extension) or a folder
+          const torrentNameExtension = path.extname(torrent.name);
+          const isFile = torrentNameExtension.length > 0;
+
+          // If torrent is a single file, use searchQueryFolder directly
+          // Otherwise, create subfolder with torrent.name
+          const movieFolderPath = isFile
+            ? searchQueryFolder
+            : path.join(searchQueryFolder, torrent.name);
 
           // Add process to tray
           addActiveProcess({
@@ -369,8 +394,9 @@ export const streamMovie = async ({
             uploadSpeed: 0,
             peers: 0,
             activeConnections: 0,
-            downloadPath,
-            torrentName: torrent.name,
+            downloadPath: searchQueryFolder,
+            // Store empty string for torrentName if it's a file, otherwise use folder name
+            torrentName: isFile ? "" : torrent.name,
             cleanup: () => {
               try {
                 if (idleCheckInterval) clearInterval(idleCheckInterval);
@@ -407,10 +433,17 @@ export const streamMovie = async ({
             console.log("Fetching subtitles from OpenSubtitles...");
 
             try {
-              const result = await downloadMovieSubs(searchQuery, {
-                fileName: movieFile.name,
-                destFolder: movieFolderPath,
-              });
+              const result = isAnime
+                ? await downloadAnimeSubs(searchQuery, {
+                    fileName: movieFile.name,
+                    destFolder: movieFolderPath,
+                    languages: [subsLanguage],
+                  })
+                : await downloadMovieSubs(searchQuery, {
+                    fileName: movieFile.name,
+                    destFolder: movieFolderPath,
+                    languages: [subsLanguage],
+                  });
 
               if (result.success) {
                 if (result.alreadyExists) {

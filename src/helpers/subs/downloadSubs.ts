@@ -5,12 +5,15 @@ import {
   searchSubtitles,
   formatResultsForLLM,
   downloadAndExtractSubtitle,
-  getSubtitlePath,
-  subtitleExists,
   getSubsDirectory,
   SubtitleSearchResult,
+  SupportedLanguage,
+  downloadAnimeSubs,
 } from "./opensubtitles";
 import { parseSearchQuery } from "../webtorrent/parseSearchQuery";
+
+// Re-export for convenience
+export { downloadAnimeSubs };
 
 const getSubtitleSelectionSystemMessage = (subtitles: string) => {
   return `<about>You are a subtitle chooser.</about>
@@ -51,7 +54,7 @@ export const downloadMovieSubs = async (
   searchQuery: string,
   options: {
     fileName?: string;
-    languages?: string[];
+    languages?: SupportedLanguage[];
     forceDownload?: boolean;
     destFolder?: string;
   } = {}
@@ -63,12 +66,6 @@ export const downloadMovieSubs = async (
 
   // Check if subtitle already exists
   const destFolder = options.destFolder ?? getSubsDirectory();
-  const subtitlePath = getSubtitlePath(title, languages[0]);
-
-  if (!options.forceDownload && subtitleExists(subtitlePath)) {
-    console.log(`Subtitle already exists: ${subtitlePath}`);
-    return { success: true, paths: [subtitlePath], alreadyExists: true };
-  }
 
   try {
     // Define search strategies with fallbacks
@@ -99,6 +96,8 @@ export const downloadMovieSubs = async (
           title: strategy.title,
           season: strategy.season,
           episode: strategy.episode,
+          fileName: options.fileName,
+          originalTitle: title, // Always use original clean title for movie ID search
         },
         { languages }
       );
@@ -111,6 +110,19 @@ export const downloadMovieSubs = async (
       console.info(
         `Found ${results.length} subtitle(s) for: ${strategy.label}`
       );
+
+      // If only one result, assume it's the right one (common for TV show episodes)
+      if (
+        results.length === 1 &&
+        typeof season === "number" &&
+        typeof episode === "number"
+      ) {
+        selectedSub = results[0];
+        console.log(
+          `Only one result found, using: ${selectedSub.filename} (strategy: ${strategy.label})`
+        );
+        break;
+      }
 
       // Format results for LLM
       const formattedResults = formatResultsForLLM(results);

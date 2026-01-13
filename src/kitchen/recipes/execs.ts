@@ -39,9 +39,8 @@ import { streamMovie } from "../../helpers/webtorrent/streamMovie";
 import { parseSearchQuery } from "../../helpers/webtorrent/parseSearchQuery";
 import { downloadMovieSubs } from "../../helpers/subs/downloadSubs";
 import {
-  buildSearchUrl,
-  scrapeSubtitleResults,
-  formatResultsForLLM,
+  SupportedLanguage,
+  isSupportedLanguage,
 } from "../../helpers/subs/opensubtitles";
 
 export const execsPerCategory: Record<
@@ -369,9 +368,14 @@ export const execsPerCategory: Record<
       async (args?: string[]) => {
         if (!args || !args[0]) return null;
         const text = args.join(" ");
-        if (!text) return null;
+        const subsLanguage = (text.split(" -")[1] ?? "eng").trim();
+        if (!isSupportedLanguage(subsLanguage)) {
+          return `Invalid subtitle language: ${subsLanguage}`;
+        }
+        const title = text.split(" -")[0].trim();
+        if (!title) return "no movie title provided";
 
-        const { searchText } = parseSearchQuery(text);
+        const { searchText } = parseSearchQuery(title);
         console.log("searching torrent for ", searchText);
         const link = await getPiratebaySearchLink(searchText);
         const {
@@ -393,7 +397,7 @@ export const execsPerCategory: Record<
           async () => {
             return getLLMResponse({
               systemMessage: await getMovieSystemMessage(selectedItemsHTML),
-              userMessage: text,
+              userMessage: title,
               schema: z.object({
                 index: z.number(),
               }),
@@ -422,11 +426,16 @@ export const execsPerCategory: Record<
         // stream the torrent (non-blocking)
         const downloadPath = path.join(os.homedir(), "Downloads", "movies");
 
-        await streamMovie({ magnetLinkUrl, downloadPath, searchQuery: text });
+        await streamMovie({
+          magnetLinkUrl,
+          downloadPath,
+          searchQuery: title,
+          subsLanguage,
+        });
 
         return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
       },
-      "title: string",
+      "title: string, subs-language?: -eng | -bul | -ita",
     ],
     download: [
       async (args?: string[]) => {
@@ -498,9 +507,13 @@ export const execsPerCategory: Record<
       async (args?: string[]) => {
         if (!args || !args[0]) return "no movie title provided";
         const text = args.join(" ");
-        if (!text) return "no movie title provided";
+        const subsLanguage = text.split(" -")[1] ?? "eng";
+        const title = text.split(" -")[0];
+        if (!title) return "no movie title provided";
 
-        const result = await downloadMovieSubs(text);
+        const result = await downloadMovieSubs(title, {
+          languages: [subsLanguage as SupportedLanguage], // will pick any if many provided.
+        });
 
         if (result.alreadyExists) {
           return `Subtitle already exists: ${result.paths?.join(", ")}`;
@@ -512,7 +525,7 @@ export const execsPerCategory: Record<
 
         return `Subtitle downloaded: ${result.paths?.join(", ")}`;
       },
-      "title: string",
+      "title: string, subs-language?: -eng | -bul | -ita",
     ],
   },
   anime: {
@@ -520,9 +533,21 @@ export const execsPerCategory: Record<
       async (args?: string[]) => {
         if (!args || !args[0]) return null;
         const text = args.join(" ");
-        if (!text) return null;
+        const subsLanguage = (text.split(" -")[1] ?? "eng").trim();
+        if (!isSupportedLanguage(subsLanguage)) {
+          return `Invalid subtitle language: ${subsLanguage}`;
+        }
+        const title = text.split(" -")[0].trim();
+        if (!title) return "no movie title provided";
+        const { searchText, season, episode } = parseSearchQuery(title, true);
+        console.log("searchText, season, episode", searchText, season, episode);
 
-        const link = await getAnimeSearchLink(text);
+        const link = await getAnimeSearchLink(
+          searchText,
+          season ?? undefined,
+          episode ?? undefined
+        );
+        console.log("searching anime torrent for ", link);
         const {
           elementsHTML: selectedItemsElementsHTML,
           text: selectedItemsHTML,
@@ -542,7 +567,7 @@ export const execsPerCategory: Record<
           async () => {
             return getLLMResponse({
               systemMessage: await getAnimeSystemMessage(selectedItemsHTML),
-              userMessage: text,
+              userMessage: title,
               schema: z.object({
                 index: z.number(),
               }),
@@ -565,13 +590,19 @@ export const execsPerCategory: Record<
         if (!magnetLinkUrl) return null;
 
         // stream the torrent (non-blocking)
-        const downloadPath = path.join(os.homedir(), "Downloads", "anime");
+        const downloadPath = path.join(os.homedir(), "Downloads", "movies");
 
-        streamMovie({ magnetLinkUrl, downloadPath, searchQuery: text });
+        await streamMovie({
+          magnetLinkUrl,
+          downloadPath,
+          searchQuery: title,
+          subsLanguage,
+          isAnime: true,
+        });
 
         return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
       },
-      "title: string",
+      "title: string, subsLanguage?: -eng | -bul | -ita",
     ],
     download: [
       async (args?: string[]) => {

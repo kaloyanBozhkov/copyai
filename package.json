@@ -46,6 +46,8 @@
   "dependencies": {
     "@koko420/ai-tools": "^1.0.7",
     "@koko420/shared": "^1.0.3",
+    "@types/adm-zip": "^0.5.7",
+    "adm-zip": "^0.5.16",
     "auto-launch": "^5.0.6",
     "deverything": "^4.5.0",
     "dotenv": "^17.2.3",
