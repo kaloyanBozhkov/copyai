@@ -1,0 +1,25 @@
+{
+  "airplay": "AirPlay",
+  "amazon": "Prime Video",
+  "amazon.alexapr": "Amazon Alexa",
+  "cdp-30": "Plex",
+  "com.disney.disneyplus-prod": "Disney+",
+  "com.geforcenow.play": "GeForce NOW",
+  "com.hbo.hbomax": "HBO Max",
+  "com.palm.app.settings": "Settings",
+  "com.webos.app.browser": "Web Browser",
+  "com.webos.app.hdmi1": "HDMI1",
+  "com.webos.app.hdmi2": "HDMI2",
+  "com.webos.app.hdmi3": "HDMI3",
+  "com.webos.app.hdmi4": "HDMI4",
+  "com.webos.app.home": "Home",
+  "com.webos.app.livetv": "Live TV",
+  "com.webos.app.mediadiscovery": "Media Player",
+  "com.webos.app.screensaver": "Screen Saver",
+  "com.webos.chromecast": "Chromecast built-in",
+  "netflix": "Netflix",
+  "spotify-beehive": "Spotify - Music and Podcasts",
+  "ui30": "Rakuten TV",
+  "youtube.leanback.v4": "YouTube"
+}
+

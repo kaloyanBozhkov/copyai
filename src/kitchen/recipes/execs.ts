@@ -12,6 +12,16 @@ import {
   listRooms,
 } from "../../helpers/wiz";
 import {
+  turnOnTV,
+  turnOffTV,
+  setTVVolume,
+  setupTV,
+  launchTVApp,
+  listTVApps,
+  openTVBrowser,
+  openYouTube,
+} from "../../helpers/lg";
+import {
   getCoverLetterSystemMessage,
   getEmailComposeLanguageSystemMessage,
   getEmailComposeSystemMessage,
@@ -548,15 +558,22 @@ export const execsPerCategory: Record<
         console.log("searchText, season, episode", searchText, season, episode);
 
         // Helper to search pages
-        const searchPages = async (withSeasonEpisode: boolean): Promise<string | null> => {
+        const searchPages = async (
+          withSeasonEpisode: boolean
+        ): Promise<string | null> => {
           let page = 1;
           while (true) {
             const link = await getAnimeSearchLink({
               search: searchText,
               page,
-              ...(withSeasonEpisode && { season: season ?? undefined, episode: episode ?? undefined }),
+              ...(withSeasonEpisode && {
+                season: season ?? undefined,
+                episode: episode ?? undefined,
+              }),
             });
-            console.log(`searching anime torrent page ${page}${withSeasonEpisode ? " (with S/E)" : ""}: ${link}`);
+            console.log(
+              `searching anime torrent page ${page}${withSeasonEpisode ? " (with S/E)" : ""}: ${link}`
+            );
 
             const {
               elementsHTML: selectedItemsElementsHTML,
@@ -638,15 +655,22 @@ export const execsPerCategory: Record<
 
         const { searchText, season, episode } = parseSearchQuery(text, true);
 
-        const searchPages = async (withSeasonEpisode: boolean): Promise<string | null> => {
+        const searchPages = async (
+          withSeasonEpisode: boolean
+        ): Promise<string | null> => {
           let page = 1;
           while (true) {
             const link = await getAnimeSearchLink({
               search: searchText,
               page,
-              ...(withSeasonEpisode && { season: season ?? undefined, episode: episode ?? undefined }),
+              ...(withSeasonEpisode && {
+                season: season ?? undefined,
+                episode: episode ?? undefined,
+              }),
             });
-            console.log(`searching anime download page ${page}${withSeasonEpisode ? " (with S/E)" : ""}: ${link}`);
+            console.log(
+              `searching anime download page ${page}${withSeasonEpisode ? " (with S/E)" : ""}: ${link}`
+            );
 
             const {
               elementsHTML: selectedItemsElementsHTML,
@@ -737,6 +761,48 @@ export const execsPerCategory: Record<
       "room: string",
     ],
     list_rooms: [async () => listRooms()],
+    tv_volume: [
+      async (args?: string[]) => {
+        const volume = parseInt(args?.[0] ?? "50", 10);
+        if (isNaN(volume)) return "invalid volume number";
+        return setTVVolume(volume);
+      },
+      "volume: number",
+    ],
+    tv_on: [async () => turnOnTV()],
+    tv_off: [async () => turnOffTV()],
+    tv_app: [
+      async (args?: string[]) => {
+        const appIdOrName = args?.[0];
+        if (!appIdOrName) return "no app ID or name provided";
+        return launchTVApp(appIdOrName);
+      },
+      "appId or appName: string",
+    ],
+    tv_list_apps: [async () => listTVApps()],
+    tv_browser: [
+      async (args?: string[]) => {
+        const url = args?.[0];
+        if (!url) return "no URL provided";
+        return openTVBrowser(url);
+      },
+      "url: string",
+    ],
+    tv_youtube: [
+      async (args?: string[]) => {
+        if (!args || args.length === 0) return "no search query or video provided";
+        const query = args.join(" ");
+        return openYouTube(query);
+      },
+      "videoId or search: string",
+    ],
+    tv_setup: [
+      async (args?: string[]) => {
+        const force = args?.[0] === "force";
+        return setupTV(force);
+      },
+      "force?: string",
+    ],
   },
   development: {},
 };
