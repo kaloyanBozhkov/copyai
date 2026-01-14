@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type Route = "command-input" | "processing-command";
+export type Route = "command-input" | "processing-command" | "grimoire";
 
 interface RouteState {
   route: Route;

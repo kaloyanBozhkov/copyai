@@ -2,6 +2,7 @@ import { app, Tray, Menu, nativeImage } from "electron";
 import { join } from "path";
 import { autoLauncher, getAutoLaunchEnabled } from "./autoLaunch";
 import { showInputWindowListener } from "./controllers";
+import { showCommandBrowser } from "../views/commandBrowser";
 import { log } from "./logError";
 import type { DownloadProcess } from "../helpers/webtorrent/downloadMovie";
 import type { StreamProcess } from "../helpers/webtorrent/streamMovie";
@@ -65,6 +66,10 @@ const updateTrayMenu = () => {
     {
       label: "Open CopyAI",
       click: () => showInputWindowListener(isDevMode),
+    },
+    {
+      label: "Command Grimoire",
+      click: () => showCommandBrowser(isDevMode),
     },
   ];
 

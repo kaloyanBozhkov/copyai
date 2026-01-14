@@ -1,11 +1,29 @@
+import { useEffect, useState } from "react";
 import CommandInput from "./components/CommandInput";
 import { useInit } from "./hooks/useInit";
 import { useRouteStore } from "./store/useRouteStore";
 import { Thinking } from "./components/Thinking";
+import { CommandGrimoire } from "./components/grimoire";
 
 export default function App() {
   useInit();
-  const { route } = useRouteStore();
+  const { route, setRoute } = useRouteStore();
+  const [isGrimoire, setIsGrimoire] = useState(false);
+
+  // Check URL for grimoire route on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("route") === "grimoire") {
+      setIsGrimoire(true);
+      setRoute("grimoire");
+    }
+  }, [setRoute]);
+
+  // Grimoire has its own full-screen layout
+  if (isGrimoire || route === "grimoire") {
+    return <CommandGrimoire />;
+  }
+
   return (
     <div className="flex flex-col items-center justify-center h-full w-fit">
       {(() => {
@@ -25,6 +43,8 @@ export default function App() {
                 <Thinking />
               </div>
             );
+          default:
+            return null;
         }
       })()}
     </div>
