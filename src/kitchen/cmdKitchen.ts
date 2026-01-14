@@ -4,16 +4,58 @@ import { MessageComposer } from "./messageComposer";
 import { CommandExecutor } from "./commandExecutor";
 import { execs } from "./recipes/execs";
 import { countUniqueArgs } from "./helpers";
+import { addToHistory, getCommandHistory, clearHistory } from "./commandHistory";
+
+export { clearHistory };
 
 const utensils = {
   ...execs,
   ...messageComposers,
 };
 
-export const utensilsKeys = [
+// Filter out non-executable keys (subcategories)
+const isExecutable = (key: string): boolean => {
+  const item = utensils[key];
+  if (!item) return false;
+  if (Array.isArray(item)) return true; // CommandExecutor
+  // Check for MessageComposer
+  const composer = item as any;
+  if (composer.messageRecipe && Array.isArray(composer.messageRecipe)) return true;
+  return false;
+};
+
+const baseKeys = [
   ...Object.keys(messageComposers),
   ...Object.keys(execs),
-];
+].filter(isExecutable);
+
+export const utensilsKeys = getSortedKeys();
+
+/**
+ * Get command keys sorted alphabetically but with recent history prioritized
+ */
+function getSortedKeys(): string[] {
+  const history = getCommandHistory();
+  const allKeys = [...baseKeys];
+  
+  // Sort alphabetically
+  const sorted = allKeys.sort((a, b) => a.localeCompare(b));
+  
+  // Filter history to only include valid commands that still exist
+  const recentCommands = history.filter((cmd) => sorted.includes(cmd));
+  const otherCommands = sorted.filter((cmd) => !recentCommands.includes(cmd));
+  
+  return [...recentCommands, ...otherCommands];
+}
+
+/**
+ * Refresh the sorted keys list (call after command execution)
+ */
+export const refreshCommandKeys = (): void => {
+  const newKeys = getSortedKeys();
+  utensilsKeys.length = 0;
+  utensilsKeys.push(...newKeys);
+};
 
 export type Recipe = MessageComposer | CommandExecutor;
 export const cmdKitchen = async <TRecipe extends Recipe>(
@@ -60,6 +102,11 @@ export const cmdKitchen = async <TRecipe extends Recipe>(
     clipboard.writeText(message);
     console.info("Copied:\n", message);
   }
+  
+  // Add to history and refresh keys
+  addToHistory(cmdAccessor);
+  refreshCommandKeys();
+  
   return true;
 };
 
@@ -68,10 +115,21 @@ export const executeCmdCommand = cmdKitchen<CommandExecutor>;
 
 export const getArgs = (key: string) => {
   const composer = utensils[key] as Recipe;
+  
+  // Return empty array if command doesn't exist or is not a valid recipe
+  if (!composer) {
+    return [];
+  }
+  
   if (Array.isArray(composer)) {
     const [, ...argNames] = composer;
     const argNamesList = argNames.flat();
     return createArgsTemplate(argNamesList.length, argNamesList);
+  }
+
+  // Check if it has messageRecipe property (MessageComposer)
+  if (!composer.messageRecipe || !Array.isArray(composer.messageRecipe)) {
+    return [];
   }
 
   const uniqueArgsCount = countUniqueArgs(composer.messageRecipe.join(""));
