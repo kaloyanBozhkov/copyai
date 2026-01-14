@@ -20,7 +20,19 @@ import {
   listTVApps,
   openTVBrowser,
   openYouTube,
+  openSpotify,
 } from "../../helpers/lg";
+import {
+  turnOnAC,
+  turnOffAC,
+  setACTemp,
+  setACMode,
+  setACFanRate,
+  setACFanDirection,
+  listDevices,
+  getAuthUrl,
+  authorizeWithCode,
+} from "../../helpers/daikin";
 import {
   getCoverLetterSystemMessage,
   getEmailComposeLanguageSystemMessage,
@@ -57,6 +69,7 @@ import {
   SupportedLanguage,
   isSupportedLanguage,
 } from "../../helpers/subs/opensubtitles";
+import { playSpotify } from "../../helpers/spotify";
 
 export const execsPerCategory: Record<
   string,
@@ -743,6 +756,40 @@ export const execsPerCategory: Record<
   transfer: {
     server: [async () => startTransferServer()],
   },
+  spotify: {
+    play: [
+      async (args?: string[]) => {
+        if (!args || args.length === 0) return "no keyword or song name provided";
+        
+        let keyword = "";
+        let random = false;
+        let trackIndex: number | undefined;
+        
+        // Parse arguments
+        for (let i = 0; i < args.length; i++) {
+          const arg = args[i];
+          
+          if (arg === "-random" || arg === "-r") {
+            random = true;
+          } else if ((arg === "-number" || arg === "-n") && i + 1 < args.length) {
+            const num = parseInt(args[i + 1], 10);
+            if (!isNaN(num)) {
+              trackIndex = num;
+              i++; // Skip next arg since we consumed it
+            }
+          } else {
+            // It's part of the keyword/song name
+            keyword += (keyword ? " " : "") + arg;
+          }
+        }
+        
+        if (!keyword) return "no keyword or song name provided";
+        
+        return playSpotify(keyword, random, trackIndex);
+      },
+      "keyword or song: string, -random|-r?: flag, -number|-n <index>?: number",
+    ],
+  },
   home: {
     lights_off: [async () => setAllLightsState(false)],
     lights_on: [async () => setAllLightsState(true)],
@@ -796,12 +843,95 @@ export const execsPerCategory: Record<
       },
       "videoId or search: string",
     ],
+    tv_spotify: [
+      async (args?: string[]) => {
+        if (!args || args.length === 0) return "no search query provided";
+        const query = args.join(" ");
+        return openSpotify(query);
+      },
+      "search: string",
+    ],
     tv_setup: [
       async (args?: string[]) => {
         const force = args?.[0] === "force";
         return setupTV(force);
       },
       "force?: string",
+    ],
+    aircon_on: [
+      async (args?: string[]) => {
+        const room = args?.[0];
+        return turnOnAC(room);
+      },
+      "room?: living room | office | bedroom",
+    ],
+    aircon_off: [
+      async (args?: string[]) => {
+        const room = args?.[0];
+        return turnOffAC(room);
+      },
+      "room?: living room | office | bedroom",
+    ],
+    aircon_temp: [
+      async (args?: string[]) => {
+        if (!args || args.length === 0) return "no temperature provided";
+        const lastArg = args[args.length - 1];
+        const temp = parseInt(lastArg, 10);
+        if (isNaN(temp)) return "invalid temperature";
+        
+        const room = args.length > 1 ? args.slice(0, -1).join(" ") : undefined;
+        return setACTemp(room, temp);
+      },
+      "room?: string, temp: number (16-32°C)",
+    ],
+    aircon_mode: [
+      async (args?: string[]) => {
+        if (!args || args.length === 0) return "no mode provided";
+        const lastArg = args[args.length - 1].toLowerCase();
+        const validModes = ["cool", "heat", "auto", "dry", "fan"];
+        
+        if (!validModes.includes(lastArg)) {
+          return `invalid mode. Use: ${validModes.join(", ")}`;
+        }
+        
+        const room = args.length > 1 ? args.slice(0, -1).join(" ") : undefined;
+        return setACMode(room, lastArg as any);
+      },
+      "room?: string, mode: cool | heat | auto | dry | fan",
+    ],
+    aircon_fan_rate: [
+      async (args?: string[]) => {
+        if (!args || args.length === 0) return "no fan rate provided";
+        const lastArg = args[args.length - 1];
+        const rate = parseInt(lastArg, 10);
+        if (isNaN(rate) || rate < 1 || rate > 5) return "fan rate must be 1-5";
+        
+        const room = args.length > 1 ? args.slice(0, -1).join(" ") : undefined;
+        return setACFanRate(room, rate);
+      },
+      "room?: string, rate: 1-5",
+    ],
+    aircon_fan_dir: [
+      async (args?: string[]) => {
+        if (!args || args.length === 0) return "no fan direction provided";
+        const lastArg = args[args.length - 1];
+        const dir = parseInt(lastArg, 10);
+        if (isNaN(dir) || dir < 0 || dir > 5) return "fan direction must be 0-5";
+        
+        const room = args.length > 1 ? args.slice(0, -1).join(" ") : undefined;
+        return setACFanDirection(room, dir);
+      },
+      "room?: string, direction: 0-5",
+    ],
+    aircon_list: [async () => listDevices()],
+    aircon_authorize: [async () => getAuthUrl()],
+    aircon_code: [
+      async (args?: string[]) => {
+        const code = args?.[0];
+        if (!code) return "no authorization code provided";
+        return authorizeWithCode(code);
+      },
+      "code: string",
     ],
   },
   development: {},

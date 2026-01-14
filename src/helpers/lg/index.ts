@@ -271,6 +271,39 @@ export const openYouTube = async (query: string, accountIndex?: number): Promise
 };
 
 /**
+ * Open Spotify web player with a search query
+ * @param query - Search query for a song/artist/album
+ */
+export const openSpotify = async (query: string): Promise<string> => {
+  if (!query) {
+    return "No search query provided";
+  }
+
+  const encodedQuery = encodeURIComponent(query);
+  const spotifyUrl = `https://open.spotify.com/search/${encodedQuery}`;
+
+  try {
+    await connectAndExecute(async (tv) => {
+      return new Promise((resolve, reject) => {
+        tv.request(
+          "ssap://system.launcher/open",
+          {
+            target: spotifyUrl,
+          },
+          (err: Error, res: any) => {
+            if (err) reject(err);
+            else resolve(res);
+          }
+        );
+      });
+    });
+    return `Opened Spotify web player and searched for: ${query}`;
+  } catch (error) {
+    return `Failed to open Spotify: ${error instanceof Error ? error.message : String(error)}`;
+  }
+};
+
+/**
  * Open web browser at a specific URL on the LG TV
  * @param url - The URL to open (e.g., "https://www.google.com")
  */

@@ -47,8 +47,10 @@
     "@koko420/ai-tools": "^1.0.7",
     "@koko420/shared": "^1.0.3",
     "@types/adm-zip": "^0.5.7",
+    "@types/spotify-web-api-node": "^5.0.11",
     "adm-zip": "^0.5.16",
     "auto-launch": "^5.0.6",
+    "axios": "^1.7.9",
     "deverything": "^4.5.0",
     "dotenv": "^17.2.3",
     "electron-squirrel-startup": "^1.0.1",
@@ -58,6 +60,7 @@
     "node-html-parser": "^7.0.1",
     "node-unrar-js": "^2.0.2",
     "puppeteer": "^24.34.0",
+    "spotify-web-api-node": "^5.0.2",
     "uuid": "^13.0.0",
     "webtorrent": "^2.8.5",
     "zod": "^4.1.13"
