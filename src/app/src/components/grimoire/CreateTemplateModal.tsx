@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Sparkles, Scroll, Wand2, Plus, Trash2, Eye, EyeOff } from "lucide-react";
-import type { CustomTemplate } from "./types";
+import { X, Sparkles, Scroll, Wand2, Plus, Trash2, Eye, EyeOff, Book } from "lucide-react";
+import { ipcRenderer } from "@/utils/electron";
+import type { CustomTemplate, GrimoireSettings } from "./types";
+import { BookFieldsModal } from "./BookFieldsModal";
 
 interface CreateTemplateModalProps {
   existingCategories: string[];
@@ -25,11 +27,28 @@ export function CreateTemplateModal({
   const [lines, setLines] = useState<string[]>(existingTemplate?.messageRecipe || [""]);
   const [previewArgs, setPreviewArgs] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [bookFields, setBookFields] = useState<Record<string, string>>({});
+  const [showBookModal, setShowBookModal] = useState(false);
+  const [autocompleteLineIndex, setAutocompleteLineIndex] = useState<number | null>(null);
+  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<string[]>([]);
+  const [activeInputRef, setActiveInputRef] = useState<HTMLInputElement | null>(null);
 
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     nameInputRef.current?.focus();
+    
+    // Load book fields from settings
+    const handleSettingsData = (_: unknown, data: GrimoireSettings) => {
+      setBookFields(data.book);
+    };
+    
+    ipcRenderer.on("grimoire-settings-data", handleSettingsData);
+    ipcRenderer.send("grimoire-get-settings");
+    
+    return () => {
+      ipcRenderer.removeListener("grimoire-settings-data", handleSettingsData);
+    };
   }, []);
 
   // Extract unique placeholders from all lines (supports $0, ${0}, ${named})
@@ -71,14 +90,90 @@ export function CreateTemplateModal({
     }
   };
 
-  const handleLineChange = (index: number, value: string) => {
+  const handleLineChange = (index: number, value: string, inputRef?: HTMLInputElement) => {
     const newLines = [...lines];
     newLines[index] = value;
     setLines(newLines);
+
+    // Check for ${book. autocomplete
+    if (inputRef) {
+      const cursorPos = inputRef.selectionStart || 0;
+      const textBeforeCursor = value.slice(0, cursorPos);
+      const match = textBeforeCursor.match(/\$\{book\.(\w*)$/);
+      
+      if (match) {
+        const searchTerm = match[1].toLowerCase();
+        const suggestions = Object.keys(bookFields).filter((field) =>
+          field.toLowerCase().startsWith(searchTerm)
+        );
+        setAutocompleteSuggestions(suggestions);
+        setAutocompleteLineIndex(index);
+        setActiveInputRef(inputRef);
+      } else {
+        setAutocompleteSuggestions([]);
+        setAutocompleteLineIndex(null);
+      }
+    }
+  };
+
+  const handleAutocompleteSelect = (field: string) => {
+    if (autocompleteLineIndex === null || !activeInputRef) return;
+
+    const currentLine = lines[autocompleteLineIndex];
+    const cursorPos = activeInputRef.selectionStart || 0;
+    const textBeforeCursor = currentLine.slice(0, cursorPos);
+    const textAfterCursor = currentLine.slice(cursorPos);
+    
+    // Find the ${book. part and replace it
+    const match = textBeforeCursor.match(/\$\{book\.(\w*)$/);
+    if (match) {
+      const beforeBook = textBeforeCursor.slice(0, match.index);
+      const newLine = `${beforeBook}\${book.${field}}${textAfterCursor}`;
+      const newLines = [...lines];
+      newLines[autocompleteLineIndex] = newLine;
+      setLines(newLines);
+      
+      // Move cursor after the inserted field
+      setTimeout(() => {
+        const newCursorPos = beforeBook.length + `\${book.${field}}`.length;
+        activeInputRef.setSelectionRange(newCursorPos, newCursorPos);
+        activeInputRef.focus();
+      }, 0);
+    }
+    
+    setAutocompleteSuggestions([]);
+    setAutocompleteLineIndex(null);
+  };
+
+  const handleBookModalSelect = (field: string) => {
+    if (activeInputRef && autocompleteLineIndex !== null) {
+      // Insert at cursor position
+      const currentLine = lines[autocompleteLineIndex];
+      const cursorPos = activeInputRef.selectionStart || 0;
+      const before = currentLine.slice(0, cursorPos);
+      const after = currentLine.slice(cursorPos);
+      const newLine = `${before}\${book.${field}}${after}`;
+      const newLines = [...lines];
+      newLines[autocompleteLineIndex] = newLine;
+      setLines(newLines);
+      
+      setTimeout(() => {
+        const newCursorPos = before.length + `\${book.${field}}`.length;
+        activeInputRef.setSelectionRange(newCursorPos, newCursorPos);
+        activeInputRef.focus();
+      }, 0);
+    }
   };
 
   const getPreview = () => {
     let result = lines.join("\n");
+    
+    // First, replace ${book.field} placeholders with actual values
+    for (const [field, value] of Object.entries(bookFields)) {
+      result = result.split(`\${book.${field}}`).join(value);
+    }
+    
+    // Then replace user arguments (numbered and named)
     extractedArgs.forEach((arg, i) => {
       const isNumbered = /^\d+$/.test(arg);
       const replacement = previewArgs[i] || `[${isNumbered ? `$${arg}` : arg}]`;
@@ -258,13 +353,39 @@ export function CreateTemplateModal({
                 {lines.map((line, index) => (
                   <div key={index} className="grimoire-line-row">
                     <span className="grimoire-line-number">{index + 1}</span>
-                    <input
-                      type="text"
-                      value={line}
-                      onChange={(e) => handleLineChange(index, e.target.value)}
-                      placeholder={`Line ${index + 1}...`}
-                      className="grimoire-line-input"
-                    />
+                    <div className="grimoire-line-input-wrapper">
+                      <input
+                        type="text"
+                        value={line}
+                        onChange={(e) => {
+                          handleLineChange(index, e.target.value, e.target);
+                          setActiveInputRef(e.target);
+                          setAutocompleteLineIndex(index);
+                        }}
+                        onFocus={(e) => {
+                          setActiveInputRef(e.target);
+                          setAutocompleteLineIndex(index);
+                        }}
+                        placeholder={`Line ${index + 1}...`}
+                        className="grimoire-line-input"
+                      />
+                      {autocompleteLineIndex === index && autocompleteSuggestions.length > 0 && (
+                        <div className="grimoire-autocomplete-dropdown">
+                          {autocompleteSuggestions.map((field) => (
+                            <button
+                              key={field}
+                              className="grimoire-autocomplete-item"
+                              onClick={() => handleAutocompleteSelect(field)}
+                            >
+                              <code>{"${book." + field + "}"}</code>
+                              <span className="grimoire-autocomplete-value">
+                                {bookFields[field]}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     {lines.length > 1 && (
                       <button
                         className="grimoire-line-remove"
@@ -279,6 +400,14 @@ export function CreateTemplateModal({
                   <Plus size={14} />
                   Add Line
                 </button>
+                <button
+                  className="grimoire-book-reference-btn"
+                  onClick={() => setShowBookModal(true)}
+                  title="View all book fields"
+                >
+                  <Book size={14} />
+                  View Book Fields
+                </button>
               </div>
 
               {extractedArgs.length > 0 && (
@@ -291,6 +420,25 @@ export function CreateTemplateModal({
                   ))}
                 </div>
               )}
+
+              {(() => {
+                const text = lines.join("\n");
+                const bookMatches = text.match(/\$\{book\.([a-zA-Z_][a-zA-Z0-9_]*)\}/g) || [];
+                const bookFieldsUsed = [...new Set(bookMatches.map((m) => m.slice(7, -1)))]; // Remove ${book. and }
+                return bookFieldsUsed.length > 0 ? (
+                  <div className="grimoire-args-detected grimoire-book-fields-detected">
+                    <span>Book fields used:</span>
+                    {bookFieldsUsed.map((field) => (
+                      <code key={field} title={bookFields[field] || "Not defined"}>
+                        {"${book." + field + "}"}
+                        <span className="grimoire-book-field-preview">
+                          = {bookFields[field] || "(not defined)"}
+                        </span>
+                      </code>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
 
               <div className="grimoire-preview-section">
                 <button
@@ -342,6 +490,14 @@ export function CreateTemplateModal({
           )}
         </div>
       </div>
+
+      {showBookModal && (
+        <BookFieldsModal
+          bookFields={bookFields}
+          onClose={() => setShowBookModal(false)}
+          onSelect={handleBookModalSelect}
+        />
+      )}
     </div>
   );
 }
