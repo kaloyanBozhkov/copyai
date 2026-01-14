@@ -103,7 +103,12 @@ export default function CommandGrimoire() {
 
       {isCreateModalOpen && (
         <CreateTemplateModal
-          existingCategories={Object.keys(commandsData.templates)}
+          existingCategories={[
+            ...new Set([
+              ...Object.keys(commandsData.templates),
+              ...commandsData.customTemplates.map((t) => t.category),
+            ]),
+          ]}
           onClose={() => setIsCreateModalOpen(false)}
           onCreate={handleCreateTemplate}
         />

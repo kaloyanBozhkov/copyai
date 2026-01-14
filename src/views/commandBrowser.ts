@@ -1,6 +1,4 @@
 import { BrowserWindow, ipcMain } from "electron";
-import { state } from "../electron/state";
-import { sendToActiveWindow } from "../electron/actions";
 import path from "path";
 import { execsPerCategory } from "../kitchen/recipes/execs";
 import {
@@ -10,9 +8,8 @@ import {
   updateCustomTemplate,
   CustomTemplate,
 } from "../kitchen/customTemplates";
-import { messageBuilder } from "../kitchen/messageComposer";
-
-import { messageComposersPerCategory } from "../kitchen/recipes/templateCommands";
+import { templateRecipes } from "../kitchen/recipes/templateCommands";
+import { extractPlaceholders, replacePlaceholders } from "../kitchen/helpers";
 
 interface CommandInfo {
   name: string;
@@ -80,25 +77,21 @@ export const getCommandsData = (): {
   }
 
   // Process templates
-  for (const [category, commands] of Object.entries(messageComposersPerCategory)) {
-    if (typeof commands !== "object" || commands === null) continue;
-
+  for (const [category, commands] of Object.entries(templateRecipes)) {
     templateCategories[category] = {
       name: category,
       commands: [],
     };
 
-    for (const [key, value] of Object.entries(commands as Record<string, any>)) {
-      if (value && typeof value === "object" && "messageRecipe" in value) {
-        templateCategories[category].commands.push({
-          name: key,
-          fullKey: `${category}.${key}`,
-          category,
-          type: "template",
-          args: extractTemplateArgs(value.messageRecipe),
-          messageRecipe: value.messageRecipe,
-        });
-      }
+    for (const [key, recipe] of Object.entries(commands)) {
+      templateCategories[category].commands.push({
+        name: key,
+        fullKey: `${category}.${key}`,
+        category,
+        type: "template",
+        args: extractTemplateArgs(recipe),
+        messageRecipe: recipe,
+      });
     }
   }
 
@@ -109,12 +102,14 @@ export const getCommandsData = (): {
   };
 };
 
-// Extract $0, $1, etc. from template
+// Extract all placeholders from template (supports $0, ${0}, ${named})
 const extractTemplateArgs = (recipe: string[]): string[] => {
   const text = recipe.join("\n");
-  const matches = text.match(/\$(\d+)/g) || [];
-  const unique = [...new Set(matches)].sort();
-  return unique.map((m) => `arg${m.slice(1)}`);
+  const placeholders = extractPlaceholders(text);
+  // Return formatted arg definitions
+  return placeholders.map((p) => 
+    /^\d+$/.test(p) ? `$${p}: string` : `${p}: string`
+  );
 };
 
 // Window management
@@ -232,11 +227,18 @@ const setupCommandBrowserIPC = () => {
   ipcMain.on(
     "grimoire-execute-template",
     (event, { messageRecipe, args }: { messageRecipe: string[]; args: string[] }) => {
-      const composer = {
-        messageRecipe,
-        ...messageBuilder(),
-      };
-      const result = composer.build(args);
+      const text = messageRecipe.join("\n");
+      const placeholders = extractPlaceholders(text);
+      
+      // Build values map from args array
+      const valuesMap: Record<string, string> = {};
+      placeholders.forEach((placeholder, index) => {
+        if (args && args[index] !== undefined) {
+          valuesMap[placeholder] = args[index];
+        }
+      });
+      
+      const result = replacePlaceholders(text, valuesMap);
       event.reply("grimoire-template-result", result);
     }
   );
@@ -258,4 +260,5 @@ export const closeCommandBrowser = () => {
   }
   browserWindow = null;
 };
+
 

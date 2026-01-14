@@ -141,8 +141,7 @@ export function CommandDetail({
             <div className="grimoire-args-list">
               {args.map((arg, i) => (
                 <div key={i} className="grimoire-arg-item">
-                  <span className="grimoire-arg-index">${i}</span>
-                  <span className="grimoire-arg-name">{arg}</span>
+                  <code className="grimoire-arg-name">{arg}</code>
                 </div>
               ))}
             </div>
@@ -163,30 +162,36 @@ export function CommandDetail({
         )}
 
         {/* Template Testing */}
-        {recipe && (
+        {(isTemplate || isCustom) && recipe && (
           <div className="grimoire-test-section">
             <div className="grimoire-info-label">
               <Play size={14} />
               <span>Test Incantation</span>
             </div>
 
-            <div className="grimoire-test-inputs">
-              {args.map((arg, i) => (
-                <div key={i} className="grimoire-test-input">
-                  <label>${i} ({arg})</label>
-                  <input
-                    type="text"
-                    value={testArgs[i] || ""}
-                    onChange={(e) => {
-                      const newArgs = [...testArgs];
-                      newArgs[i] = e.target.value;
-                      setTestArgs(newArgs);
-                    }}
-                    placeholder={`Enter ${arg}...`}
-                  />
-                </div>
-              ))}
-            </div>
+            {args.length > 0 ? (
+              <div className="grimoire-test-inputs">
+                {args.map((arg, i) => (
+                  <div key={i} className="grimoire-test-input">
+                    <label>{arg}</label>
+                    <input
+                      type="text"
+                      value={testArgs[i] || ""}
+                      onChange={(e) => {
+                        const newArgs = [...testArgs];
+                        newArgs[i] = e.target.value;
+                        setTestArgs(newArgs);
+                      }}
+                      placeholder={`Enter value...`}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grimoire-info-value muted">
+                No parameters - output will be static text
+              </div>
+            )}
 
             <button className="grimoire-test-btn" onClick={handleTestTemplate}>
               <Play size={14} />
@@ -223,10 +228,37 @@ export function CommandDetail({
   );
 }
 
+/**
+ * Extract placeholders from recipe - supports $0, ${0}, ${named}
+ */
 function extractArgsFromRecipe(recipe: string[]): string[] {
   const text = recipe.join("\n");
-  const matches = text.match(/\$(\d+)/g) || [];
-  const unique = [...new Set(matches)].sort();
-  return unique.map((m) => `arg${m.slice(1)}`);
+  const all: string[] = [];
+  
+  // Match $0, $1 etc (without braces)
+  const numberedNoBraces = text.match(/\$(\d+)(?!\w)/g) || [];
+  for (const m of numberedNoBraces) {
+    const num = m.slice(1);
+    if (!all.includes(num)) all.push(num);
+  }
+  
+  // Match ${0}, ${1} etc (with braces, numbered)
+  const numberedWithBraces = text.match(/\$\{(\d+)\}/g) || [];
+  for (const m of numberedWithBraces) {
+    const num = m.slice(2, -1);
+    if (!all.includes(num)) all.push(num);
+  }
+  
+  // Match ${named} placeholders
+  const namedPlaceholders = text.match(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g) || [];
+  for (const m of namedPlaceholders) {
+    const name = m.slice(2, -1);
+    if (!all.includes(name)) all.push(name);
+  }
+
+  // Return formatted arg definitions
+  return all.map((p) => 
+    /^\d+$/.test(p) ? `$${p}: string` : `${p}: string`
+  );
 }
 

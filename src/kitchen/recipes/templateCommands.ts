@@ -1,9 +1,5 @@
-import { flattenObjectDot } from "../helpers";
-import {
-  messageBuilder,
-  msgCategory,
-  type MessageComposer,
-} from "../messageComposer";
+import { flattenObjectDot, extractPlaceholders, replacePlaceholders } from "../helpers";
+import { CommandExecutor } from "../commandExecutor";
 
 const commonIngredients = {
   schemaRules: `<schema_rules>
@@ -22,61 +18,70 @@ const commonIngredients = {
 <important_schema_note>After creating the prisma schema file, paste the <schema_rules> at its top as a comment so it's always clear to readers</important_schema_note>`,
 };
 
-export const messageComposersPerCategory: Record<
-  msgCategory,
-  Record<string, MessageComposer>
-> = {
+// Helper to create a template command from recipe lines
+const template = (recipe: string[]): CommandExecutor => {
+  const text = recipe.join("\n");
+  const placeholders = extractPlaceholders(text);
+  
+  // Create arg definitions - numbered ones show $N, named show the name
+  const argDefs = placeholders.map((p) => 
+    /^\d+$/.test(p) ? `$${p}: string` : `${p}: string`
+  );
+
+  const buildFn = (args?: string[]) => {
+    if (!args || args.length === 0) return text;
+    
+    // Build a map of placeholder names to provided values
+    const valuesMap: Record<string, string> = {};
+    placeholders.forEach((placeholder, index) => {
+      if (args[index] !== undefined) {
+        valuesMap[placeholder] = args[index];
+      }
+    });
+    
+    return replacePlaceholders(text, valuesMap);
+  };
+
+  return [buildFn, ...argDefs];
+};
+
+// Store raw recipes for grimoire display
+export const templateRecipes: Record<string, Record<string, string[]>> = {
   comments: {
-    frame: {
-      messageRecipe: [
-        "/* --------------------------------",
-        "/*   $0",
-        "/* -------------------------------- */",
-      ],
-      ...messageBuilder(),
-    },
-    full_frame: {
-      messageRecipe: [
-        "/* --------------------------------",
-        "/*   $0",
-        "/* -------------------------------- */",
-        "",
-        "",
-        "",
-        "/* --------------------------------",
-        "/*   $0",
-        "/* -------------------------------- */",
-      ],
-      ...messageBuilder(),
-    },
+    frame: [
+      "/* --------------------------------",
+      "/*   $0",
+      "/* -------------------------------- */",
+    ],
+    full_frame: [
+      "/* --------------------------------",
+      "/*   $0",
+      "/* -------------------------------- */",
+      "",
+      "",
+      "",
+      "/* --------------------------------",
+      "/*   $0",
+      "/* -------------------------------- */",
+    ],
   },
   prompts: {
-    tag: {
-      messageRecipe: ["<$0>$1<$0>"],
-      ...messageBuilder(),
-    },
-    system_message: {
-      messageRecipe: [
-        `<about></about>\n\n<instructions></instructions>\n\n<examples></examples>`,
-      ],
-      ...messageBuilder(),
-    },
-    tool_recipe: {
-      messageRecipe: [
-        `<about></about>
+    tag: ["<$0>$1<$0>"],
+    system_message: [
+      `<about></about>\n\n<instructions></instructions>\n\n<examples></examples>`,
+    ],
+    tool_recipe: [
+      `<about></about>
         <instructions></instructions>
         <when_to_use></when_to_use>
         <when_to_skip></when_to_skip>
         <examples></examples>
         <important></important>`,
-      ],
-      ...messageBuilder(),
-    },
+    ],
   },
   code: {
-    service_procedures_recipe: {
-      messageRecipe: [
-        `<instructions>
+    service_procedures_recipe: [
+      `<instructions>
 With the _____ service we want to build a few procedures that will be used to interact with the service.
 </instructions>
 <files_to_reference>
@@ -92,14 +97,11 @@ With the _____ service we want to build a few procedures that will be used to in
 - Do not output any example files or other example files.
 - Do not output any sample files or other sample files.
 </important>`,
-      ],
-      ...messageBuilder(),
-    },
+    ],
   },
-  setuo_project: {
-    express_recipe: {
-      messageRecipe: [
-        `<instructions>
+  setup_project: {
+    express_recipe: [
+      `<instructions>
 You setup a new backend project with given tech. Follow best practices, use context7.
 Make sure to add a middleware that blocks requests not including an X-API-KEY header that's matching the one in .env file.
 </instructions>
@@ -135,19 +137,27 @@ Make sure to add a middleware that blocks requests not including an X-API-KEY he
 - always use zod for paylaod schemas validation and type annotation
 </important>
 `,
-        `{{with-prisma}}${commonIngredients.schemaRules}{{/with-prisma}}`,
-      ],
-      ...messageBuilder(),
-    },
+      `{{with-prisma}}${commonIngredients.schemaRules}{{/with-prisma}}`,
+    ],
   },
   ssh: {
-    linkbase: {
-      messageRecipe: [
-        "ssh -i ~/.ssh/id_rsa_github_actions_kb_react_native_apps root@213.165.251.35",
-      ],
-      ...messageBuilder(),
-    },
+    linkbase: [
+      "ssh -i ~/.ssh/id_rsa_github_actions_kb_react_native_apps root@213.165.251.35",
+    ],
   },
-} as const;
+};
+
+// Convert recipes to command executors
+export const messageComposersPerCategory: Record<
+  string,
+  Record<string, CommandExecutor>
+> = Object.fromEntries(
+  Object.entries(templateRecipes).map(([category, commands]) => [
+    category,
+    Object.fromEntries(
+      Object.entries(commands).map(([name, recipe]) => [name, template(recipe)])
+    ),
+  ])
+);
 
 export const messageComposers = flattenObjectDot(messageComposersPerCategory);

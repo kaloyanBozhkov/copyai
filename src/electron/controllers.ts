@@ -3,10 +3,19 @@ import { closeActiveWindow } from "./actions";
 import { showCommandAutocompleteInput } from "../views/commandAutocompleteInput";
 import { showProcessingCommandView } from "../views/processingCommand";
 
+let isProcessingCommand = false;
+
 export const showInputWindowListener = async (isDevMode = false) => {
+  // Prevent race condition: don't show input while command is processing
+  if (isProcessingCommand) {
+    console.log("Command already processing, ignoring shortcut");
+    return;
+  }
+
   closeActiveWindow();
   const input = await showCommandAutocompleteInput(isDevMode);
   if (!input) return;
+  
   let args: string[] = [];
   let cmdAccessor = "";
 
@@ -24,9 +33,14 @@ export const showInputWindowListener = async (isDevMode = false) => {
     cmdArgs: JSON.stringify(args),
   });
 
-  const onCompletedProcessing = await showProcessingCommandView();
-  const success = await cmdKitchen(cmdAccessor, args);
-  onCompletedProcessing(success !== false);
+  isProcessingCommand = true;
+  try {
+    const onCompletedProcessing = await showProcessingCommandView();
+    const success = await cmdKitchen(cmdAccessor, args);
+    onCompletedProcessing(success !== false);
+  } finally {
+    isProcessingCommand = false;
+  }
 };
 
 export const closeActiveWindowListener = () => {

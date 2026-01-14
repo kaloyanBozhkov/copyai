@@ -1,7 +1,8 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { messageBuilder, MessageComposer } from "./messageComposer";
+import { CommandExecutor } from "./commandExecutor";
+import { extractPlaceholders, replacePlaceholders } from "./helpers";
 
 const CUSTOM_TEMPLATES_FILE = path.join(
   os.homedir(),
@@ -111,28 +112,51 @@ export const clearTemplatesCache = (): void => {
   templatesCache = null;
 };
 
+// Helper to create a CommandExecutor from recipe
+const templateToExecutor = (recipe: string[]): CommandExecutor => {
+  const text = recipe.join("\n");
+  const placeholders = extractPlaceholders(text);
+  
+  // Create arg definitions - numbered ones just show the number, named show the name
+  const argDefs = placeholders.map((p) => 
+    /^\d+$/.test(p) ? `$${p}: string` : `${p}: string`
+  );
+
+  const buildFn = (args?: string[]) => {
+    if (!args || args.length === 0) return text;
+    
+    // Build a map of placeholder names to provided values
+    const valuesMap: Record<string, string> = {};
+    placeholders.forEach((placeholder, index) => {
+      if (args[index] !== undefined) {
+        valuesMap[placeholder] = args[index];
+      }
+    });
+    
+    return replacePlaceholders(text, valuesMap);
+  };
+
+  return [buildFn, ...argDefs];
+};
+
 /**
- * Convert custom templates to MessageComposer format for use in cmdKitchen
+ * Convert custom templates to CommandExecutor format for use in cmdKitchen
  * Returns a flattened object with keys like "custom.category.name" and shortcut "name"
  */
-export const getCustomTemplatesAsComposers = (): Record<string, MessageComposer> => {
+export const getCustomTemplatesAsComposers = (): Record<string, CommandExecutor> => {
   const templates = loadTemplates();
-  const result: Record<string, MessageComposer> = {};
+  const result: Record<string, CommandExecutor> = {};
 
   for (const template of templates) {
-    const composer: MessageComposer = {
-      messageRecipe: template.messageRecipe,
-      ...messageBuilder(),
-    };
+    const executor = templateToExecutor(template.messageRecipe);
 
     // Add with full key (custom.category.name)
     const fullKey = `custom.${template.category}.${template.name}`;
-    result[fullKey] = composer;
+    result[fullKey] = executor;
 
     // Add shortcut (just name) if not conflicting
-    result[template.name] = composer;
+    result[template.name] = executor;
   }
 
   return result;
 };
-

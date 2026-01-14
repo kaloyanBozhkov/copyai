@@ -27,15 +27,34 @@ export function CreateTemplateModal({
     nameInputRef.current?.focus();
   }, []);
 
-  // Extract unique $N placeholders from all lines
-  const extractedArgs = Array.from(
-    new Set(
-      lines
-        .join("\n")
-        .match(/\$(\d+)/g)
-        ?.map((m) => parseInt(m.slice(1), 10)) || []
-    )
-  ).sort((a, b) => a - b);
+  // Extract unique placeholders from all lines (supports $0, ${0}, ${named})
+  const extractedArgs = (() => {
+    const text = lines.join("\n");
+    const all: string[] = [];
+    
+    // Match $0, $1 etc (without braces)
+    const numberedNoBraces = text.match(/\$(\d+)(?!\w)/g) || [];
+    for (const m of numberedNoBraces) {
+      const num = m.slice(1);
+      if (!all.includes(num)) all.push(num);
+    }
+    
+    // Match ${0}, ${1} etc (with braces, numbered)
+    const numberedWithBraces = text.match(/\$\{(\d+)\}/g) || [];
+    for (const m of numberedWithBraces) {
+      const num = m.slice(2, -1);
+      if (!all.includes(num)) all.push(num);
+    }
+    
+    // Match ${named} placeholders
+    const namedPlaceholders = text.match(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g) || [];
+    for (const m of namedPlaceholders) {
+      const name = m.slice(2, -1);
+      if (!all.includes(name)) all.push(name);
+    }
+    
+    return all;
+  })();
 
   const handleAddLine = () => {
     setLines([...lines, ""]);
@@ -55,9 +74,18 @@ export function CreateTemplateModal({
 
   const getPreview = () => {
     let result = lines.join("\n");
-    extractedArgs.forEach((argNum, i) => {
-      const replacement = previewArgs[i] || `[arg${argNum}]`;
-      result = result.split(`$${argNum}`).join(replacement);
+    extractedArgs.forEach((arg, i) => {
+      const isNumbered = /^\d+$/.test(arg);
+      const replacement = previewArgs[i] || `[${isNumbered ? `$${arg}` : arg}]`;
+      
+      if (isNumbered) {
+        // Replace both $N and ${N} formats
+        result = result.split(`$${arg}`).join(replacement);
+        result = result.split(`\${${arg}}`).join(replacement);
+      } else {
+        // Replace ${named} format
+        result = result.split(`\${${arg}}`).join(replacement);
+      }
     });
     return result;
   };
@@ -210,8 +238,8 @@ export function CreateTemplateModal({
               <div className="grimoire-content-header">
                 <h3>Write Your Incantation</h3>
                 <p>
-                  Use <code>$0</code>, <code>$1</code>, etc. for placeholders that will
-                  be replaced with arguments.
+                  Use <code>$0</code>, <code>${"${0}"}</code> for numbered or{" "}
+                  <code>${"${name}"}</code> for named placeholders.
                 </p>
               </div>
 
@@ -246,7 +274,9 @@ export function CreateTemplateModal({
                 <div className="grimoire-args-detected">
                   <span>Detected placeholders:</span>
                   {extractedArgs.map((arg) => (
-                    <code key={arg}>${arg}</code>
+                    <code key={arg}>
+                      {/^\d+$/.test(arg) ? `$${arg}` : `\${${arg}}`}
+                    </code>
                   ))}
                 </div>
               )}
@@ -264,11 +294,11 @@ export function CreateTemplateModal({
                   <>
                     {extractedArgs.length > 0 && (
                       <div className="grimoire-preview-args">
-                        {extractedArgs.map((argNum, i) => (
+                        {extractedArgs.map((arg, i) => (
                           <input
-                            key={argNum}
+                            key={arg}
                             type="text"
-                            placeholder={`$${argNum} value...`}
+                            placeholder={`${/^\d+$/.test(arg) ? `$${arg}` : arg} value...`}
                             value={previewArgs[i] || ""}
                             onChange={(e) => {
                               const newArgs = [...previewArgs];

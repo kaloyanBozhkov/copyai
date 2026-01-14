@@ -1,9 +1,7 @@
 import { clipboard } from "electron";
 import { messageComposers } from "./recipes/templateCommands";
-import { MessageComposer } from "./messageComposer";
 import { CommandExecutor } from "./commandExecutor";
 import { execs } from "./recipes/execs";
-import { countUniqueArgs } from "./helpers";
 import { addToHistory, getCommandHistory, clearHistory } from "./commandHistory";
 import {
   getCustomTemplatesAsComposers,
@@ -12,34 +10,23 @@ import {
 
 export { clearHistory };
 
-// Mutable utensils object that includes custom templates
-let utensils: Record<string, MessageComposer | CommandExecutor | Record<string, unknown>> = {
+// Get current utensils (always fresh, includes custom templates)
+const getUtensils = () => ({
   ...execs,
   ...messageComposers,
   ...getCustomTemplatesAsComposers(),
-};
+} as Record<string, CommandExecutor | Record<string, unknown>>);
 
-// Refresh utensils when custom templates change
-const refreshUtensils = () => {
-  utensils = {
-    ...execs,
-    ...messageComposers,
-    ...getCustomTemplatesAsComposers(),
-  };
-  refreshCommandKeys();
-};
-
-// Subscribe to custom template changes
-onCustomTemplatesChange(refreshUtensils);
+// Subscribe to custom template changes to refresh keys
+onCustomTemplatesChange(() => refreshCommandKeys());
 
 // Filter out non-executable keys (subcategories)
 const isExecutable = (key: string): boolean => {
+  const utensils = getUtensils();
   const item = utensils[key];
   if (!item) return false;
-  if (Array.isArray(item)) return true; // CommandExecutor
-  // Check for MessageComposer
-  const composer = item as any;
-  if (composer.messageRecipe && Array.isArray(composer.messageRecipe)) return true;
+  // CommandExecutor is an array with function as first element
+  if (Array.isArray(item) && typeof item[0] === "function") return true;
   return false;
 };
 
@@ -77,30 +64,34 @@ export const refreshCommandKeys = (): void => {
   utensilsKeys.push(...newKeys);
 };
 
-export type Recipe = MessageComposer | CommandExecutor;
-export const cmdKitchen = async <TRecipe extends Recipe>(
+export const cmdKitchen = async (
   cmdAccessor: string,
   builderArgs?: string[]
 ) => {
+  const utensils = getUtensils();
   const parts = cmdAccessor.split(".");
   
-  let recipe: Recipe | null = null;
+  let recipe: CommandExecutor | null = null;
   
   // Try full accessor first (category.subcategory.command or category.command)
-  if (utensils[cmdAccessor]) {
-    recipe = utensils[cmdAccessor] as TRecipe;
+  if (utensils[cmdAccessor] && Array.isArray(utensils[cmdAccessor])) {
+    recipe = utensils[cmdAccessor] as CommandExecutor;
   }
   
   // Try without first part (for shortcuts like living-room.to)
   if (!recipe && parts.length > 1) {
     const withoutCategory = parts.slice(1).join(".");
-    recipe = utensils[withoutCategory] as TRecipe;
+    if (utensils[withoutCategory] && Array.isArray(utensils[withoutCategory])) {
+      recipe = utensils[withoutCategory] as CommandExecutor;
+    }
   }
   
   // Try just the command part (backwards compatibility)
   if (!recipe && parts.length > 0) {
     const commandOnly = parts[parts.length - 1];
-    recipe = utensils[commandOnly] as TRecipe;
+    if (utensils[commandOnly] && Array.isArray(utensils[commandOnly])) {
+      recipe = utensils[commandOnly] as CommandExecutor;
+    }
   }
   
   if (!recipe) {
@@ -108,9 +99,7 @@ export const cmdKitchen = async <TRecipe extends Recipe>(
     return;
   }
 
-  const message = await (Array.isArray(recipe)
-    ? recipe[0](builderArgs)
-    : recipe!.build(builderArgs));
+  const message = await recipe[0](builderArgs);
 
   // null signals failure - don't copy, return false
   if (message === null) {
@@ -130,30 +119,18 @@ export const cmdKitchen = async <TRecipe extends Recipe>(
   return true;
 };
 
-export const copyCommand = cmdKitchen<MessageComposer>;
-export const executeCmdCommand = cmdKitchen<CommandExecutor>;
-
 export const getArgs = (key: string) => {
-  const composer = utensils[key] as Recipe;
+  const utensils = getUtensils();
+  const command = utensils[key];
   
-  // Return empty array if command doesn't exist or is not a valid recipe
-  if (!composer) {
+  // Return empty array if command doesn't exist or is not a CommandExecutor
+  if (!command || !Array.isArray(command)) {
     return [];
   }
   
-  if (Array.isArray(composer)) {
-    const [, ...argNames] = composer;
-    const argNamesList = argNames.flat();
-    return createArgsTemplate(argNamesList.length, argNamesList);
-  }
-
-  // Check if it has messageRecipe property (MessageComposer)
-  if (!composer.messageRecipe || !Array.isArray(composer.messageRecipe)) {
-    return [];
-  }
-
-  const uniqueArgsCount = countUniqueArgs(composer.messageRecipe.join(""));
-  return createArgsTemplate(uniqueArgsCount);
+  const [, ...argNames] = command;
+  const argNamesList = argNames.flat();
+  return createArgsTemplate(argNamesList.length, argNamesList);
 };
 
 const createArgsTemplate = (argsCount: number, names?: string[]) => {
