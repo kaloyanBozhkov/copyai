@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { messageBuilder, MessageComposer } from "./messageComposer";
 
 const CUSTOM_TEMPLATES_FILE = path.join(
   os.homedir(),
@@ -20,6 +21,21 @@ interface CustomTemplatesData {
 }
 
 let templatesCache: CustomTemplate[] | null = null;
+
+// Callbacks to notify when templates change
+const changeListeners: Array<() => void> = [];
+
+export const onCustomTemplatesChange = (callback: () => void) => {
+  changeListeners.push(callback);
+  return () => {
+    const index = changeListeners.indexOf(callback);
+    if (index > -1) changeListeners.splice(index, 1);
+  };
+};
+
+const notifyChange = () => {
+  changeListeners.forEach((cb) => cb());
+};
 
 const loadTemplates = (): CustomTemplate[] => {
   if (templatesCache) return templatesCache;
@@ -44,6 +60,7 @@ const saveTemplates = (templates: CustomTemplate[]): void => {
     const data: CustomTemplatesData = { templates };
     fs.writeFileSync(CUSTOM_TEMPLATES_FILE, JSON.stringify(data, null, 2), "utf-8");
     templatesCache = templates;
+    notifyChange();
   } catch (error) {
     console.error("Failed to save custom templates:", error);
   }
@@ -92,5 +109,30 @@ export const updateCustomTemplate = (
 
 export const clearTemplatesCache = (): void => {
   templatesCache = null;
+};
+
+/**
+ * Convert custom templates to MessageComposer format for use in cmdKitchen
+ * Returns a flattened object with keys like "custom.category.name" and shortcut "name"
+ */
+export const getCustomTemplatesAsComposers = (): Record<string, MessageComposer> => {
+  const templates = loadTemplates();
+  const result: Record<string, MessageComposer> = {};
+
+  for (const template of templates) {
+    const composer: MessageComposer = {
+      messageRecipe: template.messageRecipe,
+      ...messageBuilder(),
+    };
+
+    // Add with full key (custom.category.name)
+    const fullKey = `custom.${template.category}.${template.name}`;
+    result[fullKey] = composer;
+
+    // Add shortcut (just name) if not conflicting
+    result[template.name] = composer;
+  }
+
+  return result;
 };
 

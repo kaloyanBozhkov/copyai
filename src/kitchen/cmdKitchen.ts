@@ -5,13 +5,32 @@ import { CommandExecutor } from "./commandExecutor";
 import { execs } from "./recipes/execs";
 import { countUniqueArgs } from "./helpers";
 import { addToHistory, getCommandHistory, clearHistory } from "./commandHistory";
+import {
+  getCustomTemplatesAsComposers,
+  onCustomTemplatesChange,
+} from "./customTemplates";
 
 export { clearHistory };
 
-const utensils = {
+// Mutable utensils object that includes custom templates
+let utensils: Record<string, MessageComposer | CommandExecutor | Record<string, unknown>> = {
   ...execs,
   ...messageComposers,
+  ...getCustomTemplatesAsComposers(),
 };
+
+// Refresh utensils when custom templates change
+const refreshUtensils = () => {
+  utensils = {
+    ...execs,
+    ...messageComposers,
+    ...getCustomTemplatesAsComposers(),
+  };
+  refreshCommandKeys();
+};
+
+// Subscribe to custom template changes
+onCustomTemplatesChange(refreshUtensils);
 
 // Filter out non-executable keys (subcategories)
 const isExecutable = (key: string): boolean => {
@@ -24,9 +43,10 @@ const isExecutable = (key: string): boolean => {
   return false;
 };
 
-const baseKeys = [
+const getBaseKeys = () => [
   ...Object.keys(messageComposers),
   ...Object.keys(execs),
+  ...Object.keys(getCustomTemplatesAsComposers()),
 ].filter(isExecutable);
 
 export const utensilsKeys = getSortedKeys();
@@ -36,7 +56,7 @@ export const utensilsKeys = getSortedKeys();
  */
 function getSortedKeys(): string[] {
   const history = getCommandHistory();
-  const allKeys = [...baseKeys];
+  const allKeys = getBaseKeys();
   
   // Sort alphabetically
   const sorted = allKeys.sort((a, b) => a.localeCompare(b));
