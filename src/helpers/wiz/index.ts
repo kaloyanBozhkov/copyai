@@ -180,24 +180,24 @@ export const setAllLightsBrightness = async (
   };
 
   if (color) {
-    const rgb = parseColor(color);
-    if (rgb) {
-      params.r = rgb.r;
-      params.g = rgb.g;
-      params.b = rgb.b;
+    const colorResult = parseColor(color);
+    if (colorResult.type === "rgb" && colorResult.value) {
+      params.r = colorResult.value.r;
+      params.g = colorResult.value.g;
+      params.b = colorResult.value.b;
+    } else if (colorResult.type === "scene" && colorResult.value) {
+      params.sceneId = colorResult.value;
     } else {
       return `Invalid color: ${color}`;
     }
   }
 
-  const message = Buffer.from(
-    JSON.stringify({ method: "setPilot", params })
-  );
+  const message = Buffer.from(JSON.stringify({ method: "setPilot", params }));
 
   try {
     await sendUdp(client, message, WIZ_PORT, BROADCAST_ADDR);
     let msg = `All lights set to ${brightness}%`;
-    if (color) msg += ` with color ${color}`;
+    if (color) msg += ` with ${color}`;
     return msg;
   } catch (err) {
     return `Error: ${(err as Error).message}`;
@@ -224,11 +224,13 @@ export const setRoomLightsBrightness = async (
   };
 
   if (color) {
-    const rgb = parseColor(color);
-    if (rgb) {
-      params.r = rgb.r;
-      params.g = rgb.g;
-      params.b = rgb.b;
+    const colorResult = parseColor(color);
+    if (colorResult.type === "rgb" && colorResult.value) {
+      params.r = colorResult.value.r;
+      params.g = colorResult.value.g;
+      params.b = colorResult.value.b;
+    } else if (colorResult.type === "scene" && colorResult.value) {
+      params.sceneId = colorResult.value;
     } else {
       return `Invalid color: ${color}`;
     }
@@ -245,7 +247,7 @@ export const setRoomLightsBrightness = async (
         resolve(`No lights found in room: ${roomName}`);
       } else {
         let msg = `Set ${foundLights.length} light(s) in ${roomName} to ${brightness}%`;
-        if (color) msg += ` with color ${color}`;
+        if (color) msg += ` with ${color}`;
         resolve(msg);
       }
     }, DISCOVERY_TIMEOUT);
@@ -278,7 +280,82 @@ export const setRoomLightsBrightness = async (
   });
 };
 
-const parseColor = (color: string): { r: number; g: number; b: number } | null => {
+type ColorResult =
+  | { type: "rgb"; value: { r: number; g: number; b: number } }
+  | { type: "scene"; value: number }
+  | { type: "invalid"; value: null };
+
+const parseColor = (color: string): ColorResult => {
+  const colorLower = color.toLowerCase();
+
+  // Wiz scene presets
+  const sceneMap: Record<string, number> = {
+    ocean: 1,
+    romance: 2,
+    sunset: 3,
+    party: 4,
+    fireplace: 5,
+    cozy: 6,
+    "warm-light": 6,
+    "warm light": 6,
+    "default": 6,
+    "reset": 6,
+    forest: 7,
+    pastel: 8,
+    "pastel-colors": 8,
+    "pastel colors": 8,
+    "wake-up": 9,
+    "wake up": 9,
+    wakeup: 9,
+    "bed-time": 10,
+    "bed time": 10,
+    bedtime: 10,
+    warm: 11,
+    "warm-white": 11,
+    "warm white": 11,
+    day: 12,
+    daylight: 12,
+    cool: 13,
+    "cool-white": 13,
+    "cool white": 13,
+    night: 14,
+    "night-light": 14,
+    "night light": 14,
+    nightlight: 14,
+    focus: 15,
+    relax: 16,
+    "true-colors": 17,
+    "true colors": 17,
+    truecolors: 17,
+    "tv-time": 18,
+    "tv time": 18,
+    tvtime: 18,
+    "plant-growth": 19,
+    "plant growth": 19,
+    plantgrowth: 19,
+    spring: 20,
+    summer: 21,
+    fall: 22,
+    "deep-dive": 23,
+    "deep dive": 23,
+    deepdive: 23,
+    jungle: 24,
+    mojito: 25,
+    club: 26,
+    christmas: 27,
+    halloween: 28,
+    candlelight: 29,
+    "golden-white": 30,
+    "golden white": 30,
+    pulse: 31,
+    steampunk: 32,
+  };
+
+  if (sceneMap[colorLower] !== undefined) {
+    return { type: "scene", value: sceneMap[colorLower] };
+  }
+
+  // RGB color names
   const colorMap: Record<string, { r: number; g: number; b: number }> = {
     red: { r: 255, g: 0, b: 0 },
     green: { r: 0, g: 255, b: 0 },
@@ -292,9 +369,8 @@ const parseColor = (color: string): { r: number; g: number; b: number } | null =
     magenta: { r: 255, g: 0, b: 255 },
   };
 
-  const colorLower = color.toLowerCase();
   if (colorMap[colorLower]) {
-    return colorMap[colorLower];
+    return { type: "rgb", value: colorMap[colorLower] };
   }
 
   // Try parsing hex color (#RRGGBB or RRGGBB)
@@ -302,11 +378,45 @@ const parseColor = (color: string): { r: number; g: number; b: number } | null =
   if (hexMatch) {
     const hex = hexMatch[1];
     return {
-      r: parseInt(hex.substring(0, 2), 16),
-      g: parseInt(hex.substring(2, 4), 16),
-      b: parseInt(hex.substring(4, 6), 16),
+      type: "rgb",
+      value: {
+        r: parseInt(hex.substring(0, 2), 16),
+        g: parseInt(hex.substring(2, 4), 16),
+        b: parseInt(hex.substring(4, 6), 16),
+      },
     };
   }
 
-  return null;
+  return { type: "invalid", value: null };
+};
+
+/**
+ * Parse brightness and color from parts in any order
+ * @param parts - Array of strings that may contain brightness (number) and color
+ * @returns Object with brightness and optional color, or error string
+ */
+export const parseBrightnessAndColor = (
+  parts: string[]
+): { brightness: number; color?: string } | string => {
+  if (parts.length === 0) return "no brightness or color provided";
+
+  let brightness: number | undefined;
+  let color: string | undefined;
+
+  for (const part of parts) {
+    const num = parseInt(part, 10);
+    if (!isNaN(num) && brightness === undefined) {
+      brightness = num;
+    } else {
+      // It's likely a color
+      if (!color) {
+        color = part;
+      }
+    }
+  }
+
+  if (brightness === undefined) return "no brightness provided";
+  if (brightness < 0 || brightness > 100) return "brightness must be 0-100";
+
+  return { brightness, color };
 };

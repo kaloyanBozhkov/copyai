@@ -12,6 +12,7 @@ import {
   setAllLightsBrightness,
   setRoomLightsBrightness,
   listRooms,
+  parseBrightnessAndColor,
 } from "../../helpers/wiz";
 import {
   turnOnTV,
@@ -73,9 +74,31 @@ import {
 } from "../../helpers/subs/opensubtitles";
 import { playSpotify } from "../../helpers/spotify";
 
+// Helper to create room-specific commands
+const createRoomCommands = (
+  roomName: string
+): Record<string, CommandExecutor> => ({
+  off: [async () => setRoomLightsState(roomName, false)],
+  on: [async () => setRoomLightsState(roomName, true)],
+  to: [
+    async (args?: string[]) => {
+      if (!args || args.length === 0) return "no brightness provided";
+
+      // Split the first arg by spaces
+      const parts = args[0].split(" ");
+      const result = parseBrightnessAndColor(parts);
+
+      if (typeof result === "string") return result;
+
+      return setRoomLightsBrightness(roomName, result.brightness, result.color);
+    },
+    "brightness: number (0-100) | color, color?: string | scene | brightness",
+  ],
+});
+
 export const execsPerCategory: Record<
   string,
-  Record<string, CommandExecutor>
+  Record<string, CommandExecutor | Record<string, CommandExecutor>>
 > = {
   generate: {
     uuid: [() => uuidv4()],
@@ -761,19 +784,23 @@ export const execsPerCategory: Record<
   spotify: {
     play: [
       async (args?: string[]) => {
-        if (!args || args.length === 0) return "no keyword or song name provided";
-        
+        if (!args || args.length === 0)
+          return "no keyword or song name provided";
+
         let keyword = "";
         let random = false;
         let trackIndex: number | undefined;
-        
+
         // Parse arguments
         for (let i = 0; i < args.length; i++) {
           const arg = args[i];
-          
+
           if (arg === "-random" || arg === "-r") {
             random = true;
-          } else if ((arg === "-number" || arg === "-n") && i + 1 < args.length) {
+          } else if (
+            (arg === "-number" || arg === "-n") &&
+            i + 1 < args.length
+          ) {
             const num = parseInt(args[i + 1], 10);
             if (!isNaN(num)) {
               trackIndex = num;
@@ -784,205 +811,179 @@ export const execsPerCategory: Record<
             keyword += (keyword ? " " : "") + arg;
           }
         }
-        
+
         if (!keyword) return "no keyword or song name provided";
-        
+
         return playSpotify(keyword, random, trackIndex);
       },
       "keyword or song: string, -random|-r?: flag, -number|-n <index>?: number",
     ],
   },
   home: {
+    // Global lights commands
     lights_off: [async () => setAllLightsState(false)],
     lights_on: [async () => setAllLightsState(true)],
     lights_to: [
       async (args?: string[]) => {
         if (!args || args.length === 0) return "no brightness provided";
-        
+
         // Split the first arg by spaces since it comes as single string
         const parts = args[0].split(" ");
-        const brightness = parseInt(parts[0], 10);
-        if (isNaN(brightness)) return "invalid brightness number";
-        const color = parts[1];
-        
-        return setAllLightsBrightness(brightness, color);
+        const result = parseBrightnessAndColor(parts);
+
+        if (typeof result === "string") return result;
+
+        return setAllLightsBrightness(result.brightness, result.color);
       },
-      "brightness: number (0-100), color?: string",
+      "brightness: number (0-100) | color, color?: string | scene | brightness",
     ],
-    room_off: [
-      async (args?: string[]) => {
-        if (!args || !args[0]) return "no room name provided";
-        return setRoomLightsState(args.join(" "), false);
-      },
-      "room: string",
-    ],
-    room_on: [
-      async (args?: string[]) => {
-        if (!args || !args[0]) return "no room name provided";
-        return setRoomLightsState(args.join(" "), true);
-      },
-      "room: string",
-    ],
-    room_to: [
-      async (args?: string[]) => {
-        if (!args || args.length === 0) return "no room name or brightness provided";
-        
-        // Split the first arg by spaces since it comes as single string
-        const parts = args[0].split(" ");
-        if (parts.length < 2) return "no room name or brightness provided";
-        
-        // Last part is brightness, optionally second-to-last is color
-        const lastPart = parts[parts.length - 1];
-        const brightness = parseInt(lastPart, 10);
-        
-        if (isNaN(brightness)) return "invalid brightness number";
-        
-        // Check if second-to-last might be a color
-        let color: string | undefined;
-        let roomNameParts = parts.slice(0, -1);
-        
-        if (parts.length >= 3) {
-          const potentialColor = parts[parts.length - 2];
-          // If it's a color name or hex, use it
-          if (potentialColor.match(/^(#?[0-9a-fA-F]{6}|red|green|blue|white|yellow|purple|orange|pink|cyan|magenta)$/i)) {
-            color = potentialColor;
-            roomNameParts = parts.slice(0, -2);
-          }
-        }
-        
-        const roomName = roomNameParts.join(" ");
-        if (!roomName) return "no room name provided";
-        
-        return setRoomLightsBrightness(roomName, brightness, color);
-      },
-      "room: string, color?: string, brightness: number (0-100)",
-    ],
+
+    // Room subcategories
+    "living-room": createRoomCommands("living room"),
+    bedroom: createRoomCommands("bedroom"),
+    office: createRoomCommands("office"),
+    kitchen: createRoomCommands("kitchen"),
+    hallway: createRoomCommands("hallway"),
+    balcony: createRoomCommands("balcony"),
     list_rooms: [async () => listRooms()],
-    tv_volume: [
-      async (args?: string[]) => {
-        const volume = parseInt(args?.[0] ?? "50", 10);
-        if (isNaN(volume)) return "invalid volume number";
-        return setTVVolume(volume);
-      },
-      "volume: number",
-    ],
-    tv_on: [async () => turnOnTV()],
-    tv_off: [async () => turnOffTV()],
-    tv_app: [
-      async (args?: string[]) => {
-        const appIdOrName = args?.[0];
-        if (!appIdOrName) return "no app ID or name provided";
-        return launchTVApp(appIdOrName);
-      },
-      "appId or appName: string",
-    ],
-    tv_list_apps: [async () => listTVApps()],
-    tv_browser: [
-      async (args?: string[]) => {
-        const url = args?.[0];
-        if (!url) return "no URL provided";
-        return openTVBrowser(url);
-      },
-      "url: string",
-    ],
-    tv_youtube: [
-      async (args?: string[]) => {
-        if (!args || args.length === 0) return "no search query or video provided";
-        const query = args.join(" ");
-        return openYouTube(query);
-      },
-      "videoId or search: string",
-    ],
-    tv_spotify: [
-      async (args?: string[]) => {
-        if (!args || args.length === 0) return "no search query provided";
-        const query = args.join(" ");
-        return openSpotify(query);
-      },
-      "search: string",
-    ],
-    tv_setup: [
-      async (args?: string[]) => {
-        const force = args?.[0] === "force";
-        return setupTV(force);
-      },
-      "force?: string",
-    ],
-    aircon_on: [
-      async (args?: string[]) => {
-        const room = args?.[0];
-        return turnOnAC(room);
-      },
-      "room?: living room | office | bedroom",
-    ],
-    aircon_off: [
-      async (args?: string[]) => {
-        const room = args?.[0];
-        return turnOffAC(room);
-      },
-      "room?: living room | office | bedroom",
-    ],
-    aircon_temp: [
-      async (args?: string[]) => {
-        if (!args || args.length === 0) return "no temperature provided";
-        const lastArg = args[args.length - 1];
-        const temp = parseInt(lastArg, 10);
-        if (isNaN(temp)) return "invalid temperature";
-        
-        const room = args.length > 1 ? args.slice(0, -1).join(" ") : undefined;
-        return setACTemp(room, temp);
-      },
-      "room?: string, temp: number (16-32°C)",
-    ],
-    aircon_mode: [
-      async (args?: string[]) => {
-        if (!args || args.length === 0) return "no mode provided";
-        const lastArg = args[args.length - 1].toLowerCase();
-        const validModes = ["cool", "heat", "auto", "dry", "fan"];
-        
-        if (!validModes.includes(lastArg)) {
-          return `invalid mode. Use: ${validModes.join(", ")}`;
-        }
-        
-        const room = args.length > 1 ? args.slice(0, -1).join(" ") : undefined;
-        return setACMode(room, lastArg as any);
-      },
-      "room?: string, mode: cool | heat | auto | dry | fan",
-    ],
-    aircon_fan_rate: [
-      async (args?: string[]) => {
-        if (!args || args.length === 0) return "no fan rate provided";
-        const lastArg = args[args.length - 1];
-        const rate = parseInt(lastArg, 10);
-        if (isNaN(rate) || rate < 1 || rate > 5) return "fan rate must be 1-5";
-        
-        const room = args.length > 1 ? args.slice(0, -1).join(" ") : undefined;
-        return setACFanRate(room, rate);
-      },
-      "room?: string, rate: 1-5",
-    ],
-    aircon_fan_dir: [
-      async (args?: string[]) => {
-        if (!args || args.length === 0) return "no fan direction provided";
-        const lastArg = args[args.length - 1];
-        const dir = parseInt(lastArg, 10);
-        if (isNaN(dir) || dir < 0 || dir > 5) return "fan direction must be 0-5";
-        
-        const room = args.length > 1 ? args.slice(0, -1).join(" ") : undefined;
-        return setACFanDirection(room, dir);
-      },
-      "room?: string, direction: 0-5",
-    ],
-    aircon_list: [async () => listDevices()],
-    aircon_authorize: [async () => getAuthUrl()],
-    aircon_code: [
-      async (args?: string[]) => {
-        const code = args?.[0];
-        if (!code) return "no authorization code provided";
-        return authorizeWithCode(code);
-      },
-      "code: string",
-    ],
+
+    // TV subcategory
+    tv: {
+      on: [async () => turnOnTV()],
+      off: [async () => turnOffTV()],
+      volume: [
+        async (args?: string[]) => {
+          const volume = parseInt(args?.[0] ?? "20", 10);
+          if (isNaN(volume)) return "invalid volume number";
+          return setTVVolume(volume);
+        },
+        "volume: number",
+      ],
+      app: [
+        async (args?: string[]) => {
+          const appIdOrName = args?.[0];
+          if (!appIdOrName) return "no app ID or name provided";
+          return launchTVApp(appIdOrName);
+        },
+        "appId or appName: string",
+      ],
+      list_apps: [async () => listTVApps()],
+      browser: [
+        async (args?: string[]) => {
+          const url = args?.[0];
+          if (!url) return "no URL provided";
+          return openTVBrowser(url);
+        },
+        "url: string",
+      ],
+      youtube: [
+        async (args?: string[]) => {
+          if (!args || args.length === 0)
+            return "no search query or video provided";
+          const query = args.join(" ");
+          return openYouTube(query);
+        },
+        "videoId or search: string",
+      ],
+      spotify: [
+        async (args?: string[]) => {
+          if (!args || args.length === 0) return "no search query provided";
+          const query = args.join(" ");
+          return openSpotify(query);
+        },
+        "search: string",
+      ],
+      setup: [
+        async (args?: string[]) => {
+          const force = args?.[0] === "force";
+          return setupTV(force);
+        },
+        "force?: string",
+      ],
+    }, // Aircon subcategory
+    aircon: {
+      on: [
+        async (args?: string[]) => {
+          const room = args?.[0];
+          return turnOnAC(room);
+        },
+        "room?: living room | office | bedroom",
+      ],
+      off: [
+        async (args?: string[]) => {
+          const room = args?.[0];
+          return turnOffAC(room);
+        },
+        "room?: living room | office | bedroom",
+      ],
+      temp: [
+        async (args?: string[]) => {
+          if (!args || args.length === 0) return "no temperature provided";
+          const lastArg = args[args.length - 1];
+          const temp = parseInt(lastArg, 10);
+          if (isNaN(temp)) return "invalid temperature";
+
+          const room =
+            args.length > 1 ? args.slice(0, -1).join(" ") : undefined;
+          return setACTemp(room, temp);
+        },
+        "room?: string, temp: number (16-32°C)",
+      ],
+      mode: [
+        async (args?: string[]) => {
+          if (!args || args.length === 0) return "no mode provided";
+          const lastArg = args[args.length - 1].toLowerCase();
+          const validModes = ["cool", "heat", "auto", "dry", "fan"];
+
+          if (!validModes.includes(lastArg)) {
+            return `invalid mode. Use: ${validModes.join(", ")}`;
+          }
+
+          const room =
+            args.length > 1 ? args.slice(0, -1).join(" ") : undefined;
+          return setACMode(room, lastArg as any);
+        },
+        "room?: string, mode: cool | heat | auto | dry | fan",
+      ],
+      fan_rate: [
+        async (args?: string[]) => {
+          if (!args || args.length === 0) return "no fan rate provided";
+          const lastArg = args[args.length - 1];
+          const rate = parseInt(lastArg, 10);
+          if (isNaN(rate) || rate < 1 || rate > 5)
+            return "fan rate must be 1-5";
+
+          const room =
+            args.length > 1 ? args.slice(0, -1).join(" ") : undefined;
+          return setACFanRate(room, rate);
+        },
+        "room?: string, rate: 1-5",
+      ],
+      fan_dir: [
+        async (args?: string[]) => {
+          if (!args || args.length === 0) return "no fan direction provided";
+          const lastArg = args[args.length - 1];
+          const dir = parseInt(lastArg, 10);
+          if (isNaN(dir) || dir < 0 || dir > 5)
+            return "fan direction must be 0-5";
+
+          const room =
+            args.length > 1 ? args.slice(0, -1).join(" ") : undefined;
+          return setACFanDirection(room, dir);
+        },
+        "room?: string, direction: 0-5",
+      ],
+      list: [async () => listDevices()],
+      authorize: [async () => getAuthUrl()],
+      code: [
+        async (args?: string[]) => {
+          const code = args?.[0];
+          if (!code) return "no authorization code provided";
+          return authorizeWithCode(code);
+        },
+        "code: string",
+      ],
+    },
   },
   development: {},
 };
@@ -1021,7 +1022,8 @@ const LANGUAGES = [
 const setupLanguageTranslationCommands = () => {
   const curryExec = (language: string) => async (args?: string[]) => {
     const text = args?.[0] ?? "";
-    return execsPerCategory.ai.translate[0]([language + " " + text]);
+    const translateCmd = execsPerCategory.ai.translate as CommandExecutor;
+    return translateCmd[0]([language + " " + text]);
   };
 
   const cmds = LANGUAGES.reduce(

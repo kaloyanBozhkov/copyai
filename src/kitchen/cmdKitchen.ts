@@ -20,20 +20,29 @@ export const cmdKitchen = async <TRecipe extends Recipe>(
   cmdAccessor: string,
   builderArgs?: string[]
 ) => {
-  const [categoryKey, commandKey] = cmdAccessor.split(".") as [
-    keyof typeof utensils,
-    keyof (typeof utensils)[keyof typeof utensils]
-  ];
-
+  const parts = cmdAccessor.split(".");
+  
   let recipe: Recipe | null = null;
-  if (categoryKey && commandKey) {
-    recipe = utensils[categoryKey + "." + commandKey] as TRecipe;
+  
+  // Try full accessor first (category.subcategory.command or category.command)
+  if (utensils[cmdAccessor]) {
+    recipe = utensils[cmdAccessor] as TRecipe;
   }
-  if (!recipe && categoryKey) {
-    recipe = utensils[categoryKey] as TRecipe;
+  
+  // Try without first part (for shortcuts like living-room.to)
+  if (!recipe && parts.length > 1) {
+    const withoutCategory = parts.slice(1).join(".");
+    recipe = utensils[withoutCategory] as TRecipe;
   }
+  
+  // Try just the command part (backwards compatibility)
+  if (!recipe && parts.length > 0) {
+    const commandOnly = parts[parts.length - 1];
+    recipe = utensils[commandOnly] as TRecipe;
+  }
+  
   if (!recipe) {
-    console.info(`Unknown command: ${categoryKey} ${commandKey}`);
+    console.info(`Unknown command: ${cmdAccessor}`);
     return;
   }
 
