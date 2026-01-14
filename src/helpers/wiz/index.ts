@@ -170,14 +170,17 @@ export const setRoomLightsState = async (
 };
 
 export const setAllLightsBrightness = async (
-  brightness: number,
+  brightness?: number,
   color?: string
 ): Promise<string> => {
   const client = await createBroadcastClient();
   const params: any = {
     state: true,
-    dimming: Math.max(0, Math.min(100, brightness)),
   };
+
+  if (brightness !== undefined) {
+    params.dimming = Math.max(0, Math.min(100, brightness));
+  }
 
   if (color) {
     const colorResult = parseColor(color);
@@ -187,6 +190,8 @@ export const setAllLightsBrightness = async (
       params.b = colorResult.value.b;
     } else if (colorResult.type === "scene" && colorResult.value) {
       params.sceneId = colorResult.value;
+    } else if (colorResult.type === "temp" && colorResult.value) {
+      params.temp = colorResult.value;
     } else {
       return `Invalid color: ${color}`;
     }
@@ -196,8 +201,10 @@ export const setAllLightsBrightness = async (
 
   try {
     await sendUdp(client, message, WIZ_PORT, BROADCAST_ADDR);
-    let msg = `All lights set to ${brightness}%`;
+    let msg = "All lights";
+    if (brightness !== undefined) msg += ` set to ${brightness}%`;
     if (color) msg += ` with ${color}`;
+    if (brightness === undefined && !color) msg += " reset to defaults";
     return msg;
   } catch (err) {
     return `Error: ${(err as Error).message}`;
@@ -208,7 +215,7 @@ export const setAllLightsBrightness = async (
 
 export const setRoomLightsBrightness = async (
   roomName: string,
-  brightness: number,
+  brightness?: number,
   color?: string
 ): Promise<string> => {
   const client = await createBroadcastClient();
@@ -220,8 +227,11 @@ export const setRoomLightsBrightness = async (
 
   const params: any = {
     state: true,
-    dimming: Math.max(0, Math.min(100, brightness)),
   };
+
+  if (brightness !== undefined) {
+    params.dimming = Math.max(0, Math.min(100, brightness));
+  }
 
   if (color) {
     const colorResult = parseColor(color);
@@ -231,6 +241,8 @@ export const setRoomLightsBrightness = async (
       params.b = colorResult.value.b;
     } else if (colorResult.type === "scene" && colorResult.value) {
       params.sceneId = colorResult.value;
+    } else if (colorResult.type === "temp" && colorResult.value) {
+      params.temp = colorResult.value;
     } else {
       return `Invalid color: ${color}`;
     }
@@ -246,8 +258,10 @@ export const setRoomLightsBrightness = async (
       if (foundLights.length === 0) {
         resolve(`No lights found in room: ${roomName}`);
       } else {
-        let msg = `Set ${foundLights.length} light(s) in ${roomName} to ${brightness}%`;
+        let msg = `Set ${foundLights.length} light(s) in ${roomName}`;
+        if (brightness !== undefined) msg += ` to ${brightness}%`;
         if (color) msg += ` with ${color}`;
+        if (brightness === undefined && !color) msg += " to defaults";
         resolve(msg);
       }
     }, DISCOVERY_TIMEOUT);
@@ -283,6 +297,7 @@ export const setRoomLightsBrightness = async (
 type ColorResult =
   | { type: "rgb"; value: { r: number; g: number; b: number } }
   | { type: "scene"; value: number }
+  | { type: "temp"; value: number }
   | { type: "invalid"; value: null };
 
 const parseColor = (color: string): ColorResult => {
@@ -298,8 +313,6 @@ const parseColor = (color: string): ColorResult => {
     cozy: 6,
     "warm-light": 6,
     "warm light": 6,
-    "default": 6,
-    "reset": 6,
     forest: 7,
     pastel: 8,
     "pastel-colors": 8,
@@ -355,6 +368,26 @@ const parseColor = (color: string): ColorResult => {
     return { type: "scene", value: sceneMap[colorLower] };
   }
 
+  // Color temperature presets (in Kelvin, 2200-6500)
+  const tempMap: Record<string, number> = {
+    "warm-koko": 3000,
+    "white-koko": 5500,
+    default: 3000,
+    reset: 3000,
+    warmest: 2200,
+    warmer: 2700,
+    "warm-white": 3000,
+    neutral: 4000,
+    "cool-white-temp": 5000,
+    daylight: 5500,
+    coolest: 6500,
+    quiet: 2200,
+  };
+
+  if (tempMap[colorLower] !== undefined) {
+    return { type: "temp", value: tempMap[colorLower] };
+  }
+
   // RGB color names
   const colorMap: Record<string, { r: number; g: number; b: number }> = {
     red: { r: 255, g: 0, b: 0 },
@@ -393,12 +426,15 @@ const parseColor = (color: string): ColorResult => {
 /**
  * Parse brightness and color from parts in any order
  * @param parts - Array of strings that may contain brightness (number) and color
- * @returns Object with brightness and optional color, or error string
+ * @param allowEmpty - If true, allows both brightness and color to be optional
+ * @returns Object with optional brightness and color, or error string
  */
 export const parseBrightnessAndColor = (
-  parts: string[]
-): { brightness: number; color?: string } | string => {
-  if (parts.length === 0) return "no brightness or color provided";
+  parts: string[],
+  allowEmpty: boolean = false
+): { brightness?: number; color?: string } | string => {
+  if (parts.length === 0 && !allowEmpty)
+    return "no brightness or color provided";
 
   let brightness: number | undefined;
   let color: string | undefined;
@@ -407,7 +443,7 @@ export const parseBrightnessAndColor = (
     const num = parseInt(part, 10);
     if (!isNaN(num) && brightness === undefined) {
       brightness = num;
-    } else {
+    } else if (part.trim() !== "") {
       // It's likely a color
       if (!color) {
         color = part;
@@ -415,8 +451,9 @@ export const parseBrightnessAndColor = (
     }
   }
 
-  if (brightness === undefined) return "no brightness provided";
-  if (brightness < 0 || brightness > 100) return "brightness must be 0-100";
+  if (brightness !== undefined && (brightness < 0 || brightness > 100)) {
+    return "brightness must be 0-100";
+  }
 
   return { brightness, color };
 };

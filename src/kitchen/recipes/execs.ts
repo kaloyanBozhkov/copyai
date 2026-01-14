@@ -82,17 +82,25 @@ const createRoomCommands = (
   on: [async () => setRoomLightsState(roomName, true)],
   to: [
     async (args?: string[]) => {
-      if (!args || args.length === 0) return "no brightness provided";
-
-      // Split the first arg by spaces
-      const parts = args[0].split(" ");
-      const result = parseBrightnessAndColor(parts);
+      // Split the first arg by spaces, or use empty array if no args
+      const parts = args?.[0]?.split(" ").filter((p) => p.trim() !== "") ?? [];
+      const result = parseBrightnessAndColor(parts, true);
 
       if (typeof result === "string") return result;
 
-      return setRoomLightsBrightness(roomName, result.brightness, result.color);
+      // If neither provided, set both to defaults
+      if (result.brightness === undefined && !result.color) {
+        return setRoomLightsBrightness(roomName, 50, "default");
+      }
+
+      // Otherwise pass what was provided (undefined means keep current)
+      return setRoomLightsBrightness(
+        roomName,
+        result.brightness,
+        result.color
+      );
     },
-    "brightness: number (0-100) | color, color?: string | scene | brightness",
+    "brightness?: number (0-100), color?: string | scene (default: 50 default)",
   ],
 });
 
@@ -825,17 +833,22 @@ export const execsPerCategory: Record<
     lights_on: [async () => setAllLightsState(true)],
     lights_to: [
       async (args?: string[]) => {
-        if (!args || args.length === 0) return "no brightness provided";
-
-        // Split the first arg by spaces since it comes as single string
-        const parts = args[0].split(" ");
-        const result = parseBrightnessAndColor(parts);
+        // Split the first arg by spaces, or use empty array if no args
+        const parts =
+          args?.[0]?.split(" ").filter((p) => p.trim() !== "") ?? [];
+        const result = parseBrightnessAndColor(parts, true);
 
         if (typeof result === "string") return result;
 
+        // If neither provided, set both to defaults
+        if (result.brightness === undefined && !result.color) {
+          return setAllLightsBrightness(50, "default");
+        }
+
+        // Otherwise pass what was provided (undefined means keep current)
         return setAllLightsBrightness(result.brightness, result.color);
       },
-      "brightness: number (0-100) | color, color?: string | scene | brightness",
+      "brightness?: number (0-100), color?: string | scene (default: 50 default)",
     ],
 
     // Room subcategories
