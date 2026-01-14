@@ -18,6 +18,7 @@ import {
 } from "../subs/convertSrt";
 import { SupportedLanguage } from "../subs/opensubtitles";
 import { setAllLightsState } from "../wiz";
+import { openTVBrowser } from "../lg";
 
 export interface StreamProcess {
   id: string;
@@ -769,8 +770,8 @@ export const streamMovie = async ({
             console.log(`Movie: ${movieFile.name}`);
             console.log(`Access from TV: http://koko-mac.com:${port}`);
 
-            // // Open in default video player (usually QuickTime on macOS)
-            // exec(`open "${streamUrl}"`);
+            // Open in default video player
+            openTVBrowser(`http://koko-mac.com:${port}`);
 
             // Turn off lights for cinema mode
             setAllLightsState(false).then(() => {
