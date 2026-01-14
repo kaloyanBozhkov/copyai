@@ -31,6 +31,7 @@ export const getAnimeSystemMessage = async (items: string) => {
 <important>
 - Respond with ONLY the item index in the list { index: number }, no additional text or explanations.
 - If no results in search or no torrent matches search query return { index: -1 } 
+- Use your knowledge of anime episode names and titles when matching what the user is looking for. Some search results may not have the exact episode name, but you can still choose the best torrent based on the search query and what you know about the anime and its episode list.
 </important>`;
 };
 

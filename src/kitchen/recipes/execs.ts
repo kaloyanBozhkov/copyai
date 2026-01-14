@@ -7,6 +7,11 @@ import { getTranslationSystemMessage } from "../../ai/translations";
 import z from "zod";
 import { retry } from "@koko420/shared";
 import {
+  setAllLightsState,
+  setRoomLightsState,
+  listRooms,
+} from "../../helpers/wiz";
+import {
   getCoverLetterSystemMessage,
   getEmailComposeLanguageSystemMessage,
   getEmailComposeSystemMessage,
@@ -542,51 +547,72 @@ export const execsPerCategory: Record<
         const { searchText, season, episode } = parseSearchQuery(title, true);
         console.log("searchText, season, episode", searchText, season, episode);
 
-        const link = await getAnimeSearchLink(
-          searchText,
-          season ?? undefined,
-          episode ?? undefined
-        );
-        console.log("searching anime torrent for ", link);
-        const {
-          elementsHTML: selectedItemsElementsHTML,
-          text: selectedItemsHTML,
-        } = await getPageHTMLWithJS({
-          url: link,
-          selector: "tbody tr",
-          limit: 10,
-          skip: 1,
-          returnOuterHTML: true,
-        });
-
-        if (selectedItemsHTML.length === 0) {
-          return null;
-        }
-
-        const { index } = await retry(
-          async () => {
-            return getLLMResponse({
-              systemMessage: await getAnimeSystemMessage(selectedItemsHTML),
-              userMessage: title,
-              schema: z.object({
-                index: z.number(),
-              }),
+        // Helper to search pages
+        const searchPages = async (withSeasonEpisode: boolean): Promise<string | null> => {
+          let page = 1;
+          while (true) {
+            const link = await getAnimeSearchLink({
+              search: searchText,
+              page,
+              ...(withSeasonEpisode && { season: season ?? undefined, episode: episode ?? undefined }),
             });
-          },
-          3,
-          false
-        );
+            console.log(`searching anime torrent page ${page}${withSeasonEpisode ? " (with S/E)" : ""}: ${link}`);
 
-        const selectedItem = selectedItemsElementsHTML[index];
-        if (!selectedItem) {
-          return null;
+            const {
+              elementsHTML: selectedItemsElementsHTML,
+              text: selectedItemsHTML,
+            } = await getPageHTMLWithJS({
+              url: link,
+              selector: "tbody tr",
+              limit: 50,
+              skip: 1,
+              returnOuterHTML: true,
+            });
+
+            if (selectedItemsHTML.length === 0) {
+              return null;
+            }
+
+            const { index } = await retry(
+              async () => {
+                return getLLMResponse({
+                  systemMessage: await getAnimeSystemMessage(selectedItemsHTML),
+                  userMessage: title,
+                  schema: z.object({
+                    index: z.number(),
+                  }),
+                });
+              },
+              3,
+              false
+            );
+
+            const selectedItem = selectedItemsElementsHTML[index];
+            if (selectedItem) {
+              const magnetLink = parse(selectedItem).querySelector(
+                'a[href^="magnet:?"]'
+              );
+              const url = magnetLink?.getAttribute("href");
+              if (url) return url;
+            }
+
+            console.log(`No valid selection on page ${page}, trying next...`);
+            page++;
+          }
+        };
+
+        // First try with season/episode if present
+        let magnetLinkUrl: string | null = null;
+        if (season || episode) {
+          magnetLinkUrl = await searchPages(true);
         }
 
-        const magnetLink = parse(selectedItem).querySelector(
-          'a[href^="magnet:?"]'
-        );
-        if (!magnetLink) return null;
-        const magnetLinkUrl = magnetLink.getAttribute("href");
+        // Fallback to search without season/episode
+        if (!magnetLinkUrl) {
+          console.log("Falling back to search without season/episode...");
+          magnetLinkUrl = await searchPages(false);
+        }
+
         if (!magnetLinkUrl) return null;
 
         // stream the torrent (non-blocking)
@@ -610,47 +636,71 @@ export const execsPerCategory: Record<
         const text = args.join(" ");
         if (!text) return null;
 
-        const link = await getAnimeSearchLink(text);
-        const {
-          elementsHTML: selectedItemsElementsHTML,
-          text: selectedItemsHTML,
-        } = await getPageHTMLWithJS({
-          url: link,
-          selector: "tbody tr",
-          limit: 10, // 10 <li>'s
-          skip: 1, // skip from the Nth <li>
-          returnOuterHTML: true,
-        });
+        const { searchText, season, episode } = parseSearchQuery(text, true);
 
-        if (selectedItemsHTML.length === 0) {
-          return null;
-        }
-
-        const { index } = await retry(
-          async () => {
-            return getLLMResponse({
-              systemMessage: await getAnimeSystemMessage(selectedItemsHTML),
-              userMessage: text,
-              schema: z.object({
-                index: z.number(),
-              }),
+        const searchPages = async (withSeasonEpisode: boolean): Promise<string | null> => {
+          let page = 1;
+          while (true) {
+            const link = await getAnimeSearchLink({
+              search: searchText,
+              page,
+              ...(withSeasonEpisode && { season: season ?? undefined, episode: episode ?? undefined }),
             });
-          },
-          3,
-          false
-        );
+            console.log(`searching anime download page ${page}${withSeasonEpisode ? " (with S/E)" : ""}: ${link}`);
 
-        const selectedItem = selectedItemsElementsHTML[index];
-        if (!selectedItem) {
-          return null;
+            const {
+              elementsHTML: selectedItemsElementsHTML,
+              text: selectedItemsHTML,
+            } = await getPageHTMLWithJS({
+              url: link,
+              selector: "tbody tr",
+              limit: 50,
+              skip: 1,
+              returnOuterHTML: true,
+            });
+
+            if (selectedItemsHTML.length === 0) {
+              return null;
+            }
+
+            const { index } = await retry(
+              async () => {
+                return getLLMResponse({
+                  systemMessage: await getAnimeSystemMessage(selectedItemsHTML),
+                  userMessage: text,
+                  schema: z.object({
+                    index: z.number(),
+                  }),
+                });
+              },
+              3,
+              false
+            );
+
+            const selectedItem = selectedItemsElementsHTML[index];
+            if (selectedItem) {
+              const magnetLink = parse(selectedItem).querySelector(
+                'a[href^="magnet:?"]'
+              );
+              const url = magnetLink?.getAttribute("href");
+              if (url) return url;
+            }
+
+            console.log(`No valid selection on page ${page}, trying next...`);
+            page++;
+          }
+        };
+
+        let magnetLinkUrl: string | null = null;
+        if (season || episode) {
+          magnetLinkUrl = await searchPages(true);
         }
-        console.log("selectedItem", selectedItem.outerHTML);
 
-        const magnetLink = parse(selectedItem).querySelector(
-          'a[href^="magnet:?"]'
-        );
-        if (!magnetLink) return null;
-        const magnetLinkUrl = magnetLink.getAttribute("href");
+        if (!magnetLinkUrl) {
+          console.log("Falling back to search without season/episode...");
+          magnetLinkUrl = await searchPages(false);
+        }
+
         if (!magnetLinkUrl) return null;
 
         // download the torrent (non-blocking)
@@ -668,6 +718,25 @@ export const execsPerCategory: Record<
   },
   transfer: {
     server: [async () => startTransferServer()],
+  },
+  home: {
+    lights_off: [async () => setAllLightsState(false)],
+    lights_on: [async () => setAllLightsState(true)],
+    room_off: [
+      async (args?: string[]) => {
+        if (!args || !args[0]) return "no room name provided";
+        return setRoomLightsState(args.join(" "), false);
+      },
+      "room: string",
+    ],
+    room_on: [
+      async (args?: string[]) => {
+        if (!args || !args[0]) return "no room name provided";
+        return setRoomLightsState(args.join(" "), true);
+      },
+      "room: string",
+    ],
+    list_rooms: [async () => listRooms()],
   },
   development: {},
 };
