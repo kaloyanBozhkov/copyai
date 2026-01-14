@@ -168,3 +168,145 @@ export const setRoomLightsState = async (
     sendUdp(client, discoveryMessage, WIZ_PORT, BROADCAST_ADDR);
   });
 };
+
+export const setAllLightsBrightness = async (
+  brightness: number,
+  color?: string
+): Promise<string> => {
+  const client = await createBroadcastClient();
+  const params: any = {
+    state: true,
+    dimming: Math.max(0, Math.min(100, brightness)),
+  };
+
+  if (color) {
+    const rgb = parseColor(color);
+    if (rgb) {
+      params.r = rgb.r;
+      params.g = rgb.g;
+      params.b = rgb.b;
+    } else {
+      return `Invalid color: ${color}`;
+    }
+  }
+
+  const message = Buffer.from(
+    JSON.stringify({ method: "setPilot", params })
+  );
+
+  try {
+    await sendUdp(client, message, WIZ_PORT, BROADCAST_ADDR);
+    let msg = `All lights set to ${brightness}%`;
+    if (color) msg += ` with color ${color}`;
+    return msg;
+  } catch (err) {
+    return `Error: ${(err as Error).message}`;
+  } finally {
+    client.close();
+  }
+};
+
+export const setRoomLightsBrightness = async (
+  roomName: string,
+  brightness: number,
+  color?: string
+): Promise<string> => {
+  const client = await createBroadcastClient();
+  const foundLights: string[] = [];
+  const roomLower = roomName.toLowerCase();
+  const discoveryMessage = Buffer.from(
+    JSON.stringify({ method: "getSystemConfig", params: {} })
+  );
+
+  const params: any = {
+    state: true,
+    dimming: Math.max(0, Math.min(100, brightness)),
+  };
+
+  if (color) {
+    const rgb = parseColor(color);
+    if (rgb) {
+      params.r = rgb.r;
+      params.g = rgb.g;
+      params.b = rgb.b;
+    } else {
+      return `Invalid color: ${color}`;
+    }
+  }
+
+  const brightnessMessage = Buffer.from(
+    JSON.stringify({ method: "setPilot", params })
+  );
+
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      client.close();
+      if (foundLights.length === 0) {
+        resolve(`No lights found in room: ${roomName}`);
+      } else {
+        let msg = `Set ${foundLights.length} light(s) in ${roomName} to ${brightness}%`;
+        if (color) msg += ` with color ${color}`;
+        resolve(msg);
+      }
+    }, DISCOVERY_TIMEOUT);
+
+    client.on("message", (msg, rinfo) => {
+      try {
+        const response = JSON.parse(msg.toString());
+        const roomId = response.result?.roomId?.toString() ?? "";
+        const roomName = ROOM_CONFIG[roomId]?.toLowerCase() ?? "";
+
+        const matches =
+          (roomName && roomName.includes(roomLower)) ||
+          (roomName && roomLower.includes(roomName)) ||
+          roomId === roomLower;
+
+        if (matches) {
+          foundLights.push(rinfo.address);
+          client.send(
+            brightnessMessage,
+            0,
+            brightnessMessage.length,
+            WIZ_PORT,
+            rinfo.address
+          );
+        }
+      } catch {}
+    });
+
+    sendUdp(client, discoveryMessage, WIZ_PORT, BROADCAST_ADDR);
+  });
+};
+
+const parseColor = (color: string): { r: number; g: number; b: number } | null => {
+  const colorMap: Record<string, { r: number; g: number; b: number }> = {
+    red: { r: 255, g: 0, b: 0 },
+    green: { r: 0, g: 255, b: 0 },
+    blue: { r: 0, g: 0, b: 255 },
+    white: { r: 255, g: 255, b: 255 },
+    yellow: { r: 255, g: 255, b: 0 },
+    purple: { r: 128, g: 0, b: 128 },
+    orange: { r: 255, g: 165, b: 0 },
+    pink: { r: 255, g: 192, b: 203 },
+    cyan: { r: 0, g: 255, b: 255 },
+    magenta: { r: 255, g: 0, b: 255 },
+  };
+
+  const colorLower = color.toLowerCase();
+  if (colorMap[colorLower]) {
+    return colorMap[colorLower];
+  }
+
+  // Try parsing hex color (#RRGGBB or RRGGBB)
+  const hexMatch = color.match(/^#?([0-9a-fA-F]{6})$/);
+  if (hexMatch) {
+    const hex = hexMatch[1];
+    return {
+      r: parseInt(hex.substring(0, 2), 16),
+      g: parseInt(hex.substring(2, 4), 16),
+      b: parseInt(hex.substring(4, 6), 16),
+    };
+  }
+
+  return null;
+};

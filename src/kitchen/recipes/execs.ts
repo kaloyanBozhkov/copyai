@@ -9,6 +9,8 @@ import { retry } from "@koko420/shared";
 import {
   setAllLightsState,
   setRoomLightsState,
+  setAllLightsBrightness,
+  setRoomLightsBrightness,
   listRooms,
 } from "../../helpers/wiz";
 import {
@@ -793,6 +795,20 @@ export const execsPerCategory: Record<
   home: {
     lights_off: [async () => setAllLightsState(false)],
     lights_on: [async () => setAllLightsState(true)],
+    lights_to: [
+      async (args?: string[]) => {
+        if (!args || args.length === 0) return "no brightness provided";
+        
+        // Split the first arg by spaces since it comes as single string
+        const parts = args[0].split(" ");
+        const brightness = parseInt(parts[0], 10);
+        if (isNaN(brightness)) return "invalid brightness number";
+        const color = parts[1];
+        
+        return setAllLightsBrightness(brightness, color);
+      },
+      "brightness: number (0-100), color?: string",
+    ],
     room_off: [
       async (args?: string[]) => {
         if (!args || !args[0]) return "no room name provided";
@@ -806,6 +822,40 @@ export const execsPerCategory: Record<
         return setRoomLightsState(args.join(" "), true);
       },
       "room: string",
+    ],
+    room_to: [
+      async (args?: string[]) => {
+        if (!args || args.length === 0) return "no room name or brightness provided";
+        
+        // Split the first arg by spaces since it comes as single string
+        const parts = args[0].split(" ");
+        if (parts.length < 2) return "no room name or brightness provided";
+        
+        // Last part is brightness, optionally second-to-last is color
+        const lastPart = parts[parts.length - 1];
+        const brightness = parseInt(lastPart, 10);
+        
+        if (isNaN(brightness)) return "invalid brightness number";
+        
+        // Check if second-to-last might be a color
+        let color: string | undefined;
+        let roomNameParts = parts.slice(0, -1);
+        
+        if (parts.length >= 3) {
+          const potentialColor = parts[parts.length - 2];
+          // If it's a color name or hex, use it
+          if (potentialColor.match(/^(#?[0-9a-fA-F]{6}|red|green|blue|white|yellow|purple|orange|pink|cyan|magenta)$/i)) {
+            color = potentialColor;
+            roomNameParts = parts.slice(0, -2);
+          }
+        }
+        
+        const roomName = roomNameParts.join(" ");
+        if (!roomName) return "no room name provided";
+        
+        return setRoomLightsBrightness(roomName, brightness, color);
+      },
+      "room: string, color?: string, brightness: number (0-100)",
     ],
     list_rooms: [async () => listRooms()],
     tv_volume: [
