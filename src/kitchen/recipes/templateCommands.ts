@@ -22,7 +22,7 @@ const commonIngredients = {
 <important_schema_note>After creating the prisma schema file, paste the <schema_rules> at its top as a comment so it's always clear to readers</important_schema_note>`,
 };
 
-const messageComposersPerCategory: Record<
+export const messageComposersPerCategory: Record<
   msgCategory,
   Record<string, MessageComposer>
 > = {

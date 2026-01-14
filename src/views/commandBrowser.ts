@@ -12,8 +12,7 @@ import {
 } from "../kitchen/customTemplates";
 import { messageBuilder } from "../kitchen/messageComposer";
 
-// Re-import to get template commands structure
-import * as templateModule from "../kitchen/recipes/templateCommands";
+import { messageComposersPerCategory } from "../kitchen/recipes/templateCommands";
 
 interface CommandInfo {
   name: string;
@@ -80,9 +79,8 @@ export const getCommandsData = (): {
     }
   }
 
-  // Process templates - access the internal structure
-  const templateSource = (templateModule as any).messageComposersPerCategory || {};
-  for (const [category, commands] of Object.entries(templateSource)) {
+  // Process templates
+  for (const [category, commands] of Object.entries(messageComposersPerCategory)) {
     if (typeof commands !== "object" || commands === null) continue;
 
     templateCategories[category] = {
