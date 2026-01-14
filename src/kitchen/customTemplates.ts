@@ -3,6 +3,7 @@ import path from "path";
 import os from "os";
 import { CommandExecutor } from "./commandExecutor";
 import { extractPlaceholders, replacePlaceholders } from "./helpers";
+import { getBook } from "./grimoireSettings";
 
 const CUSTOM_TEMPLATES_FILE = path.join(
   os.homedir(),
@@ -123,7 +124,12 @@ const templateToExecutor = (recipe: string[]): CommandExecutor => {
   );
 
   const buildFn = (args?: string[]) => {
-    if (!args || args.length === 0) return text;
+    // Get book values for ${book.field} replacement
+    const bookValues = getBook();
+    
+    if (!args || args.length === 0) {
+      return replacePlaceholders(text, {}, bookValues);
+    }
     
     // Build a map of placeholder names to provided values
     const valuesMap: Record<string, string> = {};
@@ -133,7 +139,7 @@ const templateToExecutor = (recipe: string[]): CommandExecutor => {
       }
     });
     
-    return replacePlaceholders(text, valuesMap);
+    return replacePlaceholders(text, valuesMap, bookValues);
   };
 
   return [buildFn, ...argDefs];

@@ -1,5 +1,6 @@
 import { flattenObjectDot, extractPlaceholders, replacePlaceholders } from "../helpers";
 import { CommandExecutor } from "../commandExecutor";
+import { getBook } from "../grimoireSettings";
 
 const commonIngredients = {
   schemaRules: `<schema_rules>
@@ -29,7 +30,12 @@ const template = (recipe: string[]): CommandExecutor => {
   );
 
   const buildFn = (args?: string[]) => {
-    if (!args || args.length === 0) return text;
+    // Get book values for ${book.field} replacement
+    const bookValues = getBook();
+    
+    if (!args || args.length === 0) {
+      return replacePlaceholders(text, {}, bookValues);
+    }
     
     // Build a map of placeholder names to provided values
     const valuesMap: Record<string, string> = {};
@@ -39,7 +45,7 @@ const template = (recipe: string[]): CommandExecutor => {
       }
     });
     
-    return replacePlaceholders(text, valuesMap);
+    return replacePlaceholders(text, valuesMap, bookValues);
   };
 
   return [buildFn, ...argDefs];

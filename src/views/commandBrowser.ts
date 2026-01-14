@@ -10,6 +10,15 @@ import {
 } from "../kitchen/customTemplates";
 import { templateRecipes } from "../kitchen/recipes/templateCommands";
 import { extractPlaceholders, replacePlaceholders } from "../kitchen/helpers";
+import {
+  getSettings,
+  updateSettings,
+  setApiKey,
+  setBookField,
+  removeBookField,
+  getBook,
+  GrimoireSettings,
+} from "../kitchen/grimoireSettings";
 
 interface CommandInfo {
   name: string;
@@ -160,6 +169,7 @@ export const showCommandBrowser = async (isDevMode = false): Promise<void> => {
       if (!browserWindow || browserWindow.isDestroyed()) return;
       browserWindow.webContents.send("grimoire-init", {
         commands: getCommandsData(),
+        settings: getSettings(),
         isDevMode,
       });
       browserWindow.show();
@@ -229,6 +239,7 @@ const setupCommandBrowserIPC = () => {
     (event, { messageRecipe, args }: { messageRecipe: string[]; args: string[] }) => {
       const text = messageRecipe.join("\n");
       const placeholders = extractPlaceholders(text);
+      const bookValues = getBook();
       
       // Build values map from args array
       const valuesMap: Record<string, string> = {};
@@ -238,10 +249,44 @@ const setupCommandBrowserIPC = () => {
         }
       });
       
-      const result = replacePlaceholders(text, valuesMap);
+      const result = replacePlaceholders(text, valuesMap, bookValues);
       event.reply("grimoire-template-result", result);
     }
   );
+
+  // Settings IPC handlers
+  ipcMain.on("grimoire-get-settings", (event) => {
+    event.reply("grimoire-settings-data", getSettings());
+  });
+
+  ipcMain.on(
+    "grimoire-update-settings",
+    (event, updates: Partial<GrimoireSettings>) => {
+      const updated = updateSettings(updates);
+      event.reply("grimoire-settings-updated", updated);
+    }
+  );
+
+  ipcMain.on(
+    "grimoire-set-api-key",
+    (event, { key, value }: { key: "OPENAI_API_KEY" | "OPENROUTER_API_KEY"; value: string }) => {
+      setApiKey(key, value);
+      event.reply("grimoire-settings-data", getSettings());
+    }
+  );
+
+  ipcMain.on(
+    "grimoire-set-book-field",
+    (event, { field, value }: { field: string; value: string }) => {
+      setBookField(field, value);
+      event.reply("grimoire-settings-data", getSettings());
+    }
+  );
+
+  ipcMain.on("grimoire-remove-book-field", (event, field: string) => {
+    removeBookField(field);
+    event.reply("grimoire-settings-data", getSettings());
+  });
 };
 
 const cleanupCommandBrowserIPC = () => {
@@ -252,6 +297,11 @@ const cleanupCommandBrowserIPC = () => {
   ipcMain.removeAllListeners("grimoire-close");
   ipcMain.removeAllListeners("grimoire-minimize");
   ipcMain.removeAllListeners("grimoire-execute-template");
+  ipcMain.removeAllListeners("grimoire-get-settings");
+  ipcMain.removeAllListeners("grimoire-update-settings");
+  ipcMain.removeAllListeners("grimoire-set-api-key");
+  ipcMain.removeAllListeners("grimoire-set-book-field");
+  ipcMain.removeAllListeners("grimoire-remove-book-field");
 };
 
 export const closeCommandBrowser = () => {

@@ -4,20 +4,25 @@ import type { CustomTemplate } from "./types";
 
 interface CreateTemplateModalProps {
   existingCategories: string[];
+  existingTemplate?: CustomTemplate; // For edit mode
   onClose: () => void;
   onCreate: (template: Omit<CustomTemplate, "id" | "createdAt">) => void;
+  onUpdate?: (id: string, template: Omit<CustomTemplate, "id" | "createdAt">) => void;
 }
 
 export function CreateTemplateModal({
   existingCategories,
+  existingTemplate,
   onClose,
   onCreate,
+  onUpdate,
 }: CreateTemplateModalProps) {
+  const isEditMode = !!existingTemplate;
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("");
+  const [name, setName] = useState(existingTemplate?.name || "");
+  const [category, setCategory] = useState(existingTemplate?.category || "");
   const [isNewCategory, setIsNewCategory] = useState(false);
-  const [lines, setLines] = useState<string[]>([""]);
+  const [lines, setLines] = useState<string[]>(existingTemplate?.messageRecipe || [""]);
   const [previewArgs, setPreviewArgs] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
 
@@ -94,13 +99,19 @@ export function CreateTemplateModal({
   const canProceedStep2 = category.trim().length > 0;
   const canCreate = lines.some((l) => l.trim().length > 0);
 
-  const handleCreate = () => {
+  const handleSubmit = () => {
     if (!canCreate) return;
-    onCreate({
+    const templateData = {
       name: name.trim(),
       category: category.trim(),
       messageRecipe: lines.filter((l) => l.length > 0),
-    });
+    };
+    
+    if (isEditMode && existingTemplate && onUpdate) {
+      onUpdate(existingTemplate.id, templateData);
+    } else {
+      onCreate(templateData);
+    }
   };
 
   return (
@@ -109,7 +120,7 @@ export function CreateTemplateModal({
         <div className="grimoire-modal-header">
           <div className="grimoire-modal-title">
             <Sparkles size={18} />
-            <span>Inscribe New Scroll</span>
+            <span>{isEditMode ? "Edit Scroll" : "Inscribe New Scroll"}</span>
           </div>
           <button className="grimoire-modal-close" onClick={onClose}>
             <X size={18} />
@@ -321,10 +332,10 @@ export function CreateTemplateModal({
                 <button
                   className="grimoire-create-final-btn"
                   disabled={!canCreate}
-                  onClick={handleCreate}
+                  onClick={handleSubmit}
                 >
                   <Sparkles size={14} />
-                  Inscribe Scroll
+                  {isEditMode ? "Update Scroll" : "Inscribe Scroll"}
                 </button>
               </div>
             </div>

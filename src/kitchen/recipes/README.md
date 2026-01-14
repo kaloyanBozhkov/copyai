@@ -145,7 +145,19 @@ export const templateRecipes = {
 |--------|---------|-------------|
 | `$N` | `$0`, `$1` | Numbered placeholder (no braces) |
 | `${N}` | `${0}`, `${1}` | Numbered placeholder (with braces) |
-| `${name}` | `${title}`, `${user}` | Named placeholder |
+| `${name}` | `${title}`, `${user}` | Named placeholder (user input) |
+| `${book.field}` | `${book.name}`, `${book.email}` | Auto-filled from Grimoire Settings |
+
+### Book Placeholders (Auto-fill)
+
+The `${book.field}` syntax allows templates to reference user-defined values from the Grimoire Settings. These are **not** prompted as arguments - they are automatically filled in.
+
+**Use cases:**
+- Personal information: `${book.name}`, `${book.email}`, `${book.company}`
+- Signatures: `${book.signature}`
+- Common phrases: `${book.greeting}`, `${book.closing}`
+
+Book fields are configured in **Grimoire → Settings → The Book**.
 
 ### Example: Simple Template
 

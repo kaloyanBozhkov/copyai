@@ -48,6 +48,7 @@ export const countUniqueArgs = (message: string) => {
 /**
  * Extract all placeholders from a template string
  * Supports: $0, $1, ${0}, ${1}, ${named}, ${param_name}
+ * Note: ${book.field} placeholders are auto-replaced and NOT extracted as user args
  * Returns array of unique placeholder names in order of appearance
  */
 export const extractPlaceholders = (text: string): string[] => {
@@ -56,6 +57,7 @@ export const extractPlaceholders = (text: string): string[] => {
   // Match ${0}, ${1} etc (with braces, numbered)
   const numberedWithBraces = text.match(/\$\{(\d+)\}/g) || [];
   // Match ${named} placeholders (with braces, named - letters, numbers, underscores)
+  // Exclude ${book.xxx} as those are auto-filled from settings
   const namedPlaceholders = text.match(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g) || [];
 
   // Extract just the names/numbers
@@ -73,26 +75,44 @@ export const extractPlaceholders = (text: string): string[] => {
     if (!all.includes(num)) all.push(num);
   }
   
-  // Process named: ${param} -> "param"
+  // Process named: ${param} -> "param" (skip book.* fields)
   for (const m of namedPlaceholders) {
     const name = m.slice(2, -1); // Remove ${ and }
-    if (!all.includes(name)) all.push(name);
+    if (!name.startsWith("book.") && !all.includes(name)) all.push(name);
   }
 
   return all;
 };
 
 /**
+ * Extract ${book.field} placeholders from text
+ * Returns array of field names (without "book." prefix)
+ */
+export const extractBookPlaceholders = (text: string): string[] => {
+  const matches = text.match(/\$\{book\.([a-zA-Z_][a-zA-Z0-9_]*)\}/g) || [];
+  return [...new Set(matches.map((m) => m.slice(7, -1)))]; // Remove ${book. and }
+};
+
+/**
  * Replace placeholders in text with provided values
- * Supports: $0, ${0}, ${named}
+ * Supports: $0, ${0}, ${named}, ${book.field}
  * @param text - Template text
  * @param values - Object mapping placeholder names to values, or array for numbered
+ * @param bookValues - Optional object mapping book field names to values
  */
 export const replacePlaceholders = (
   text: string,
-  values: Record<string, string> | string[]
+  values: Record<string, string> | string[],
+  bookValues?: Record<string, string>
 ): string => {
   let result = text;
+  
+  // First, replace ${book.field} placeholders if bookValues provided
+  if (bookValues) {
+    for (const [field, val] of Object.entries(bookValues)) {
+      result = result.split(`\${book.${field}}`).join(val);
+    }
+  }
   
   if (Array.isArray(values)) {
     // Array mode: replace $0, ${0}, $1, ${1}, etc.

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Copy, Trash2, Zap, Scroll, BookOpen, Code, Tag, Play } from "lucide-react";
+import { Copy, Trash2, Zap, Scroll, BookOpen, Code, Tag, Play, Edit2 } from "lucide-react";
 import { ipcRenderer } from "@/utils/electron";
 import type { CommandInfo, CustomTemplate } from "./types";
 
@@ -7,12 +7,14 @@ interface CommandDetailProps {
   command: CommandInfo | null;
   customTemplate: CustomTemplate | null;
   onDeleteCustomTemplate: (id: string) => void;
+  onEditCustomTemplate: (template: CustomTemplate) => void;
 }
 
 export function CommandDetail({
   command,
   customTemplate,
   onDeleteCustomTemplate,
+  onEditCustomTemplate,
 }: CommandDetailProps) {
   const [testArgs, setTestArgs] = useState<string[]>([]);
   const [testResult, setTestResult] = useState<string | null>(null);
@@ -93,13 +95,22 @@ export function CommandDetail({
             {isCustom ? "Custom Scroll" : isTemplate ? "Scroll" : "Spell"}
           </span>
           {isCustom && (
-            <button
-              className="grimoire-delete-btn"
-              onClick={() => onDeleteCustomTemplate(customTemplate!.id)}
-              title="Delete this custom scroll"
-            >
-              <Trash2 size={14} />
-            </button>
+            <>
+              <button
+                className="grimoire-edit-btn"
+                onClick={() => onEditCustomTemplate(customTemplate!)}
+                title="Edit this custom scroll"
+              >
+                <Edit2 size={14} />
+              </button>
+              <button
+                className="grimoire-delete-btn"
+                onClick={() => onDeleteCustomTemplate(customTemplate!.id)}
+                title="Delete this custom scroll"
+              >
+                <Trash2 size={14} />
+              </button>
+            </>
           )}
         </div>
 

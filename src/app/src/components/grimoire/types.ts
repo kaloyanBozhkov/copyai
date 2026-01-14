@@ -29,3 +29,11 @@ export interface CommandsData {
   customTemplates: CustomTemplate[];
 }
 
+export interface GrimoireSettings {
+  apiKeys: {
+    OPENAI_API_KEY: string;
+    OPENROUTER_API_KEY: string;
+  };
+  book: Record<string, string>;
+}
+

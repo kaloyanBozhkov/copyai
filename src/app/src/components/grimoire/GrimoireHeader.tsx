@@ -1,4 +1,4 @@
-import { Search, X, Minus, Plus, Sparkles, Scroll, Zap } from "lucide-react";
+import { Search, X, Minus, Plus, Sparkles, Scroll, Zap, Settings } from "lucide-react";
 
 interface GrimoireHeaderProps {
   onClose: () => void;
@@ -8,6 +8,8 @@ interface GrimoireHeaderProps {
   filter: "all" | "execs" | "templates";
   onFilterChange: (filter: "all" | "execs" | "templates") => void;
   onCreateTemplate: () => void;
+  onOpenSettings: () => void;
+  isSettingsOpen: boolean;
 }
 
 export function GrimoireHeader({
@@ -18,6 +20,8 @@ export function GrimoireHeader({
   filter,
   onFilterChange,
   onCreateTemplate,
+  onOpenSettings,
+  isSettingsOpen,
 }: GrimoireHeaderProps) {
   return (
     <div className="grimoire-header">
@@ -68,6 +72,14 @@ export function GrimoireHeader({
         <button onClick={onCreateTemplate} className="grimoire-create-btn">
           <Plus size={16} />
           <span>Inscribe Scroll</span>
+        </button>
+
+        <button
+          onClick={onOpenSettings}
+          className={`grimoire-settings-btn ${isSettingsOpen ? "active" : ""}`}
+          title="Settings"
+        >
+          <Settings size={16} />
         </button>
       </div>
 
