@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Sparkles, Scroll, Wand2, Plus, Trash2, Eye, EyeOff, Book } from "lucide-react";
-import type { CustomTemplate } from "./types";
+import { X, Sparkles, Scroll, Wand2, Plus, Trash2, Eye, EyeOff, Book, Beaker } from "lucide-react";
+import type { CustomTemplate, AlchemyPotion } from "./types";
 import { BookFieldsModal } from "./BookFieldsModal";
+import { AlchemyFieldsModal } from "./AlchemyFieldsModal";
 
 interface CreateTemplateModalProps {
   existingCategories: string[];
   bookFields: Record<string, string>;
+  alchemyPotions: AlchemyPotion[];
   existingTemplate?: CustomTemplate;
   onClose: () => void;
   onCreate: (template: Omit<CustomTemplate, "id" | "createdAt">) => void;
@@ -15,6 +17,7 @@ interface CreateTemplateModalProps {
 export function CreateTemplateModal({
   existingCategories,
   bookFields,
+  alchemyPotions,
   existingTemplate,
   onClose,
   onCreate,
@@ -29,8 +32,10 @@ export function CreateTemplateModal({
   const [previewArgs, setPreviewArgs] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [showBookModal, setShowBookModal] = useState(false);
+  const [showAlchemyModal, setShowAlchemyModal] = useState(false);
   const [autocompleteLineIndex, setAutocompleteLineIndex] = useState<number | null>(null);
   const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<string[]>([]);
+  const [autocompleteType, setAutocompleteType] = useState<"book" | "alchemy" | null>(null);
   const [activeInputRef, setActiveInputRef] = useState<HTMLInputElement | null>(null);
 
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -78,47 +83,69 @@ export function CreateTemplateModal({
     if (inputRef) {
       const cursorPos = inputRef.selectionStart || 0;
       const textBeforeCursor = value.slice(0, cursorPos);
-      const match = textBeforeCursor.match(/\$\{book\.(\w*)$/);
-
-      if (match) {
-        const searchTerm = match[1].toLowerCase();
+      
+      // Check for ${book. autocomplete
+      const bookMatch = textBeforeCursor.match(/\$\{book\.(\w*)$/);
+      if (bookMatch) {
+        const searchTerm = bookMatch[1].toLowerCase();
         const suggestions = Object.keys(bookFields).filter((field) =>
           field.toLowerCase().startsWith(searchTerm)
         );
         setAutocompleteSuggestions(suggestions);
+        setAutocompleteType("book");
         setAutocompleteLineIndex(index);
         setActiveInputRef(inputRef);
-      } else {
-        setAutocompleteSuggestions([]);
-        setAutocompleteLineIndex(null);
+        return;
       }
+
+      // Check for ${alchemy. autocomplete
+      const alchemyMatch = textBeforeCursor.match(/\$\{alchemy\.(\w*)$/);
+      if (alchemyMatch) {
+        const searchTerm = alchemyMatch[1].toLowerCase();
+        const suggestions = alchemyPotions
+          .map((p) => p.name)
+          .filter((name) => name.toLowerCase().startsWith(searchTerm));
+        setAutocompleteSuggestions(suggestions);
+        setAutocompleteType("alchemy");
+        setAutocompleteLineIndex(index);
+        setActiveInputRef(inputRef);
+        return;
+      }
+
+      // No match
+      setAutocompleteSuggestions([]);
+      setAutocompleteType(null);
+      setAutocompleteLineIndex(null);
     }
   };
 
   const handleAutocompleteSelect = (field: string) => {
-    if (autocompleteLineIndex === null || !activeInputRef) return;
+    if (autocompleteLineIndex === null || !activeInputRef || !autocompleteType) return;
 
     const currentLine = lines[autocompleteLineIndex];
     const cursorPos = activeInputRef.selectionStart || 0;
     const textBeforeCursor = currentLine.slice(0, cursorPos);
     const textAfterCursor = currentLine.slice(cursorPos);
 
-    const match = textBeforeCursor.match(/\$\{book\.(\w*)$/);
+    const prefix = autocompleteType === "book" ? "book" : "alchemy";
+    const match = textBeforeCursor.match(new RegExp(`\\$\\{${prefix}\\.(\\w*)$`));
+    
     if (match) {
-      const beforeBook = textBeforeCursor.slice(0, match.index);
-      const newLine = `${beforeBook}\${book.${field}}${textAfterCursor}`;
+      const beforeMatch = textBeforeCursor.slice(0, match.index);
+      const newLine = `${beforeMatch}\${${prefix}.${field}}${textAfterCursor}`;
       const newLines = [...lines];
       newLines[autocompleteLineIndex] = newLine;
       setLines(newLines);
 
       setTimeout(() => {
-        const newCursorPos = beforeBook.length + `\${book.${field}}`.length;
+        const newCursorPos = beforeMatch.length + `\${${prefix}.${field}}`.length;
         activeInputRef.setSelectionRange(newCursorPos, newCursorPos);
         activeInputRef.focus();
       }, 0);
     }
 
     setAutocompleteSuggestions([]);
+    setAutocompleteType(null);
     setAutocompleteLineIndex(null);
   };
 
@@ -139,6 +166,27 @@ export function CreateTemplateModal({
         activeInputRef.focus();
       }, 0);
     }
+    setShowBookModal(false);
+  };
+
+  const handleAlchemyModalSelect = (potionName: string) => {
+    if (activeInputRef && autocompleteLineIndex !== null) {
+      const currentLine = lines[autocompleteLineIndex];
+      const cursorPos = activeInputRef.selectionStart || 0;
+      const before = currentLine.slice(0, cursorPos);
+      const after = currentLine.slice(cursorPos);
+      const newLine = `${before}\${alchemy.${potionName}}${after}`;
+      const newLines = [...lines];
+      newLines[autocompleteLineIndex] = newLine;
+      setLines(newLines);
+
+      setTimeout(() => {
+        const newCursorPos = before.length + `\${alchemy.${potionName}}`.length;
+        activeInputRef.setSelectionRange(newCursorPos, newCursorPos);
+        activeInputRef.focus();
+      }, 0);
+    }
+    setShowAlchemyModal(false);
   };
 
   const getPreview = () => {
@@ -381,22 +429,32 @@ export function CreateTemplateModal({
                       )}
 
                       {/* Autocomplete dropdown */}
-                      {autocompleteLineIndex === index && autocompleteSuggestions.length > 0 && (
-                        <div className="absolute top-full left-8 right-12 mt-1 z-10 bg-grimoire-bg-secondary border border-grimoire-gold/50 rounded shadow-xl max-h-32 overflow-y-auto">
-                          {autocompleteSuggestions.map((field) => (
-                            <button
-                              key={field}
-                              className="w-full px-3 py-2 flex items-center justify-between text-sm hover:bg-grimoire-gold/10 transition-colors"
-                              onClick={() => handleAutocompleteSelect(field)}
-                            >
-                              <code className="text-grimoire-gold font-grimoire text-xs">
-                                ${"{book." + field + "}"}
-                              </code>
-                              <span className="text-grimoire-text-dim text-xs">
-                                {bookFields[field]}
-                              </span>
-                            </button>
-                          ))}
+                      {autocompleteLineIndex === index && autocompleteSuggestions.length > 0 && autocompleteType && (
+                        <div className={`absolute top-full left-8 right-12 mt-1 z-10 bg-grimoire-bg-secondary border rounded shadow-xl max-h-32 overflow-y-auto ${
+                          autocompleteType === "book" ? "border-grimoire-accent/50" : "border-grimoire-purple/50"
+                        }`}>
+                          {autocompleteSuggestions.map((field) => {
+                            const isBook = autocompleteType === "book";
+                            const prefix = isBook ? "book" : "alchemy";
+                            const colorClass = isBook ? "text-grimoire-accent-bright" : "text-grimoire-purple-bright";
+                            const hoverClass = isBook ? "hover:bg-grimoire-accent/10" : "hover:bg-grimoire-purple/10";
+                            const valueText = isBook ? bookFields[field] : alchemyPotions.find(p => p.name === field)?.url || "";
+                            
+                            return (
+                              <button
+                                key={field}
+                                className={`w-full px-3 py-2 flex items-center justify-between text-sm ${hoverClass} transition-colors`}
+                                onClick={() => handleAutocompleteSelect(field)}
+                              >
+                                <code className={`${colorClass} font-grimoire text-xs`}>
+                                  ${"{" + prefix + "." + field + "}"}
+                                </code>
+                                <span className="text-grimoire-text-dim text-xs truncate ml-2">
+                                  {valueText}
+                                </span>
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -410,17 +468,31 @@ export function CreateTemplateModal({
                     Add Line
                   </button>
 
-                  <button
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded bg-grimoire-accent/10 border border-grimoire-accent/50 text-grimoire-accent-bright hover:bg-grimoire-accent/20 text-sm transition-all"
-                    onClick={() => {
-                      setAutocompleteLineIndex(lines.length - 1);
-                      setActiveInputRef(document.querySelector(`input[placeholder="Line ${lines.length}..."]`) as HTMLInputElement);
-                      setShowBookModal(true);
-                    }}
-                  >
-                    <Book size={14} />
-                    Add From Book
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded bg-grimoire-accent/10 border border-grimoire-accent/50 text-grimoire-accent-bright hover:bg-grimoire-accent/20 text-sm transition-all"
+                      onClick={() => {
+                        setAutocompleteLineIndex(lines.length - 1);
+                        setActiveInputRef(document.querySelector(`input[placeholder="Line ${lines.length}..."]`) as HTMLInputElement);
+                        setShowBookModal(true);
+                      }}
+                    >
+                      <Book size={14} />
+                      Add From Book
+                    </button>
+                    
+                    <button
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded bg-grimoire-purple/10 border border-grimoire-purple/50 text-grimoire-purple-bright hover:bg-grimoire-purple/20 text-sm transition-all"
+                      onClick={() => {
+                        setAutocompleteLineIndex(lines.length - 1);
+                        setActiveInputRef(document.querySelector(`input[placeholder="Line ${lines.length}..."]`) as HTMLInputElement);
+                        setShowAlchemyModal(true);
+                      }}
+                    >
+                      <Beaker size={14} />
+                      Add From Potion
+                    </button>
+                  </div>
                 </div>
 
                 {extractedArgs.length > 0 && (
@@ -461,6 +533,34 @@ export function CreateTemplateModal({
                             </span>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
+                {(() => {
+                  const text = lines.join("\n");
+                  const alchemyMatches = text.match(/\$\{alchemy\.([a-zA-Z_][a-zA-Z0-9_]*)\}/g) || [];
+                  const alchemyPotionsUsed = [...new Set(alchemyMatches.map((m) => m.slice(10, -1)))];
+                  return alchemyPotionsUsed.length > 0 ? (
+                    <div className="p-3 bg-grimoire-purple/10 border border-grimoire-purple/30 rounded">
+                      <span className="text-grimoire-purple-bright font-fantasy text-xs font-semibold block mb-2">
+                        Alchemy potions used:
+                      </span>
+                      <div className="space-y-1">
+                        {alchemyPotionsUsed.map((potionName) => {
+                          const potion = alchemyPotions.find(p => p.name === potionName);
+                          return (
+                            <div key={potionName} className="flex items-center justify-between px-3 py-1.5 bg-grimoire-purple/20 border border-grimoire-purple/50 rounded">
+                              <code className="text-grimoire-purple-bright text-xs font-grimoire">
+                                {"${alchemy." + potionName + "}"}
+                              </code>
+                              <span className="text-grimoire-text-dim text-xs truncate ml-2">
+                                {potion ? potion.url : "(not defined)"}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ) : null;
@@ -529,6 +629,14 @@ export function CreateTemplateModal({
           bookFields={bookFields}
           onClose={() => setShowBookModal(false)}
           onSelect={handleBookModalSelect}
+        />
+      )}
+
+      {showAlchemyModal && (
+        <AlchemyFieldsModal
+          potions={alchemyPotions}
+          onClose={() => setShowAlchemyModal(false)}
+          onSelect={handleAlchemyModalSelect}
         />
       )}
     </>

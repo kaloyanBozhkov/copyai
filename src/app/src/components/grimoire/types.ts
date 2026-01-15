@@ -29,11 +29,23 @@ export interface CommandsData {
   customTemplates: CustomTemplate[];
 }
 
+export interface AlchemyPotion {
+  id: string;
+  name: string;
+  method: "GET" | "POST";
+  url: string;
+  headers: Record<string, string>;
+  body?: string;
+  lastValue?: string;
+  lastFetched?: number;
+}
+
 export interface GrimoireSettings {
   apiKeys: {
     OPENAI_API_KEY: string;
     OPENROUTER_API_KEY: string;
   };
   book: Record<string, string>;
+  alchemy: AlchemyPotion[];
 }
 

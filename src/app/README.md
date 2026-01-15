@@ -25,12 +25,17 @@ src/app/
 │   │   ├── CommandInput.tsx    # Quick command entry overlay
 │   │   ├── Thinking.tsx        # Loading/processing indicator
 │   │   └── grimoire/           # Command browser components
-│   │       ├── CommandGrimoire.tsx
-│   │       ├── CategorySidebar.tsx
-│   │       ├── CommandDetail.tsx
-│   │       ├── CreateTemplateModal.tsx
-│   │       ├── GrimoireHeader.tsx
-│   │       └── types.ts
+│   │       ├── CommandGrimoire.tsx          # Main grimoire container
+│   │       ├── CategorySidebar.tsx          # Command category tree
+│   │       ├── CommandDetail.tsx            # Command info & test area
+│   │       ├── CreateTemplateModal.tsx      # Template creation wizard
+│   │       ├── GrimoireHeader.tsx           # Header with search & filters
+│   │       ├── SettingsPanel.tsx            # API keys settings
+│   │       ├── BookModal.tsx                # Static field dictionary
+│   │       ├── BookFieldsModal.tsx          # Book field picker
+│   │       ├── AlchemyModal.tsx             # Dynamic API potions manager
+│   │       ├── AlchemyFieldsModal.tsx       # Alchemy potion picker
+│   │       └── types.ts                     # Shared type definitions
 │   │
 │   ├── hooks/
 │   │   ├── useInit.ts              # App initialization
@@ -114,12 +119,31 @@ A full-screen command browser styled like a WoW quest log.
 - View command details, parameters, and documentation
 - Test templates with live preview
 - Create, edit, and delete custom templates
+- **The Book** - Manage static field dictionary for templates
+- **Alchemy Lab** - Configure dynamic API-fetched values
 
 **Structure:**
-- `GrimoireHeader` - Title bar, search, filters, create button
+- `GrimoireHeader` - Title bar, search, filters, create button, Book/Alchemy/Settings buttons
 - `CategorySidebar` - Category tree with command list
 - `CommandDetail` - Selected command info and test area
-- `CreateTemplateModal` - Wizard for creating custom templates
+- `CreateTemplateModal` - Wizard for creating custom templates with autocomplete for book/alchemy fields
+- `SettingsPanel` - API keys configuration
+- `BookModal` - Manage The Book (static dictionary fields)
+- `AlchemyModal` - Manage Alchemy potions (dynamic API values)
+
+**The Book (Static Values):**
+- Define reusable static values like name, email, company, signature
+- Reference in templates as `${book.fieldname}`
+- Autocomplete support in template editor
+- No API calls - instant substitution
+
+**Alchemy Lab (Dynamic Values):**
+- Configure HTTP requests (GET/POST) as "potions"
+- Reference in templates as `${alchemy.potionname}`
+- Autocomplete support in template editor
+- Executes API calls when template is used
+- All potions execute in parallel
+- Last fetched value cached and displayed
 
 ---
 
@@ -180,13 +204,23 @@ inputValue(value)      // Submit command or cancel (null)
 | Event | Direction | Purpose |
 |-------|-----------|---------|
 | `grimoire-mounted` | Renderer → Main | Signal grimoire is ready |
-| `grimoire-init` | Main → Renderer | Send initial command data |
+| `grimoire-init` | Main → Renderer | Send initial command data & settings |
+| `grimoire-commands-data` | Main → Renderer | Updated command list |
+| `grimoire-settings-data` | Main → Renderer | Updated settings (API keys, book, alchemy) |
 | `grimoire-get-commands` | Renderer → Main | Request command list |
 | `grimoire-add-template` | Renderer → Main | Create custom template |
 | `grimoire-remove-template` | Renderer → Main | Delete custom template |
 | `grimoire-update-template` | Renderer → Main | Modify custom template |
-| `grimoire-execute-template` | Renderer → Main | Test template with args |
+| `grimoire-execute-template` | Renderer → Main | Test template with args (awaits alchemy) |
 | `grimoire-template-result` | Main → Renderer | Template execution result |
+| `grimoire-set-api-key` | Renderer → Main | Save API key |
+| `grimoire-set-book-field` | Renderer → Main | Add/update book field |
+| `grimoire-remove-book-field` | Renderer → Main | Delete book field |
+| `grimoire-add-potion` | Renderer → Main | Create alchemy potion |
+| `grimoire-update-potion` | Renderer → Main | Modify alchemy potion |
+| `grimoire-remove-potion` | Renderer → Main | Delete alchemy potion |
+| `grimoire-execute-potion` | Renderer → Main | Test potion (execute API call) |
+| `grimoire-potion-result` | Main → Renderer | Potion execution result |
 | `grimoire-close` | Renderer → Main | Close grimoire window |
 | `grimoire-minimize` | Renderer → Main | Minimize grimoire window |
 
@@ -291,15 +325,96 @@ The `CreateTemplateModal` provides a 3-step wizard:
 
 ### Placeholder Support
 
-Templates support three placeholder formats:
+Templates support five placeholder formats:
 - `$0`, `$1` - Numbered (no braces)
 - `${0}`, `${1}` - Numbered (with braces)
 - `${name}`, `${param}` - Named placeholders
+- `${book.field}` - Static values from The Book
+- `${alchemy.potion}` - Dynamic values from Alchemy Lab
+
+### Smart Autocomplete
+
+As you type, the editor provides intelligent autocomplete:
+
+1. **Type `${book.`** → Shows all book fields with their values
+2. **Type `${alchemy.`** → Shows all alchemy potions with their URLs
+3. **Arrow keys** to navigate suggestions
+4. **Enter** to insert the selected field
+
+### Quick Insert Buttons
+
+- **Add From Book** - Browse and insert book fields via modal
+- **Add From Potion** - Browse and insert alchemy potions via modal
+
+Both buttons split 50/50 below the "Add Line" button.
 
 The modal provides:
-- Live placeholder detection
-- Preview with test values
+- Live placeholder detection (numbered, named, book, alchemy)
+- Shows which book fields and potions are used
+- Preview with test values (alchemy values fetched on test)
 - Validation before creation
+
+---
+
+## Grimoire Settings Management
+
+Settings are persisted in `~/.copyai-grimoire-settings.json` and include:
+
+### API Keys (`SettingsPanel`)
+- OpenAI API Key
+- OpenRouter API Key
+- Secure input fields with show/hide toggle
+- Instant save on button click
+
+### The Book (`BookModal`)
+- Key-value dictionary of static fields
+- Search/filter functionality
+- Add/edit/delete fields
+- Shows `${book.field}` syntax for each entry
+- Used in templates for personal info, signatures, etc.
+
+### Alchemy Lab (`AlchemyModal`)
+Each potion configuration includes:
+- **Name**: Snake_case identifier (e.g., `weather`, `stock_btc`)
+- **Method**: GET or POST
+- **URL**: API endpoint
+- **Headers**: JSON object (e.g., `{"Authorization": "Bearer ..."}`)
+- **Body**: JSON string for POST requests (optional)
+- **Last Value**: Cached result from last execution
+- **Last Fetched**: Timestamp of last execution
+
+**Features:**
+- Create/edit/delete potions
+- Test potion execution (calls API and caches result)
+- Visual feedback during API calls
+- Search/filter potions
+- Shows `${alchemy.potion}` syntax for each entry
+
+**Storage Format:**
+```json
+{
+  "apiKeys": {
+    "OPENAI_API_KEY": "sk-...",
+    "OPENROUTER_API_KEY": "sk-or-..."
+  },
+  "book": {
+    "name": "John Doe",
+    "email": "john@example.com",
+    "company": "Acme Corp"
+  },
+  "alchemy": [
+    {
+      "id": "potion_1234567890",
+      "name": "weather",
+      "method": "GET",
+      "url": "https://api.weather.com/current",
+      "headers": {"Authorization": "Bearer token"},
+      "lastValue": "Sunny, 72°F",
+      "lastFetched": 1234567890000
+    }
+  ]
+}
+```
 
 ---
 

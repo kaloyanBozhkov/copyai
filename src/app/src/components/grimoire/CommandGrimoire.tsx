@@ -6,6 +6,8 @@ import { CommandDetail } from "./CommandDetail";
 import { CreateTemplateModal } from "./CreateTemplateModal";
 import { GrimoireHeader } from "./GrimoireHeader";
 import { SettingsPanel } from "./SettingsPanel";
+import { BookModal } from "./BookModal";
+import { AlchemyModal } from "./AlchemyModal";
 import type { CommandsData, CommandInfo, CustomTemplate, GrimoireSettings } from "./types";
 
 export default function CommandGrimoire() {
@@ -16,6 +18,8 @@ export default function CommandGrimoire() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<CustomTemplate | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isBookOpen, setIsBookOpen] = useState(false);
+  const [isAlchemyOpen, setIsAlchemyOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "execs" | "templates">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -97,6 +101,14 @@ export default function CommandGrimoire() {
     }
   }, [isSettingsOpen]);
 
+  const handleOpenBook = useCallback(() => {
+    setIsBookOpen(!isBookOpen);
+  }, [isBookOpen]);
+
+  const handleOpenAlchemy = useCallback(() => {
+    setIsAlchemyOpen(!isAlchemyOpen);
+  }, [isAlchemyOpen]);
+
   if (!commandsData || !settings) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-grimoire-bg font-serif-grimoire pointer-events-auto">
@@ -122,6 +134,10 @@ export default function CommandGrimoire() {
         onCreateTemplate={() => setIsCreateModalOpen(true)}
         onOpenSettings={handleOpenSettings}
         isSettingsOpen={isSettingsOpen}
+        onOpenBook={handleOpenBook}
+        isBookOpen={isBookOpen}
+        onOpenAlchemy={handleOpenAlchemy}
+        isAlchemyOpen={isAlchemyOpen}
       />
 
       <div className="flex-1 flex overflow-hidden">
@@ -158,6 +174,7 @@ export default function CommandGrimoire() {
             ]),
           ]}
           bookFields={settings.book}
+          alchemyPotions={settings.alchemy || []}
           onClose={() => setIsCreateModalOpen(false)}
           onCreate={handleCreateTemplate}
         />
@@ -172,10 +189,25 @@ export default function CommandGrimoire() {
             ]),
           ]}
           bookFields={settings.book}
+          alchemyPotions={settings.alchemy || []}
           existingTemplate={editingTemplate}
           onClose={() => setEditingTemplate(null)}
           onCreate={handleCreateTemplate}
           onUpdate={handleUpdateTemplate}
+        />
+      )}
+
+      {isBookOpen && (
+        <BookModal
+          bookFields={settings.book}
+          onClose={() => setIsBookOpen(false)}
+        />
+      )}
+
+      {isAlchemyOpen && settings && (
+        <AlchemyModal
+          potions={settings.alchemy || []}
+          onClose={() => setIsAlchemyOpen(false)}
         />
       )}
     </div>

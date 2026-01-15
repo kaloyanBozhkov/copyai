@@ -4,12 +4,24 @@ import os from "os";
 
 const SETTINGS_FILE = path.join(os.homedir(), ".copyai-grimoire-settings.json");
 
+export interface AlchemyPotion {
+  id: string;
+  name: string;
+  method: "GET" | "POST";
+  url: string;
+  headers: Record<string, string>;
+  body?: string;
+  lastValue?: string;
+  lastFetched?: number;
+}
+
 export interface GrimoireSettings {
   apiKeys: {
     OPENAI_API_KEY: string;
     OPENROUTER_API_KEY: string;
   };
   book: Record<string, string>; // Custom dictionary fields
+  alchemy: AlchemyPotion[]; // Dynamic API-fetched values
 }
 
 const DEFAULT_SETTINGS: GrimoireSettings = {
@@ -18,6 +30,7 @@ const DEFAULT_SETTINGS: GrimoireSettings = {
     OPENROUTER_API_KEY: "",
   },
   book: {},
+  alchemy: [],
 };
 
 let settingsCache: GrimoireSettings | null = null;
@@ -48,6 +61,7 @@ const loadSettings = (): GrimoireSettings => {
         ...DEFAULT_SETTINGS, 
         ...parsed,
         apiKeys: { ...DEFAULT_SETTINGS.apiKeys, ...parsed?.apiKeys },
+        alchemy: parsed?.alchemy || [],
       };
       settingsCache = loaded;
       return loaded;
@@ -84,6 +98,7 @@ export const updateSettings = (
     ...updates,
     apiKeys: { ...current.apiKeys, ...updates.apiKeys },
     book: updates.book !== undefined ? updates.book : current.book,
+    alchemy: updates.alchemy !== undefined ? updates.alchemy : current.alchemy,
   };
   saveSettings(updated);
   return updated;
@@ -138,6 +153,89 @@ export const getBookPlaceholders = (): Record<string, string> => {
   for (const [key, value] of Object.entries(book)) {
     result[`book.${key}`] = value;
   }
+  return result;
+};
+
+// Alchemy (dynamic API values) management
+export const getAlchemy = (): AlchemyPotion[] => {
+  return loadSettings().alchemy;
+};
+
+export const getPotion = (id: string): AlchemyPotion | undefined => {
+  return loadSettings().alchemy.find((p) => p.id === id);
+};
+
+export const addPotion = (potion: AlchemyPotion): void => {
+  const current = loadSettings();
+  current.alchemy.push(potion);
+  saveSettings(current);
+};
+
+export const updatePotion = (potion: AlchemyPotion): void => {
+  const current = loadSettings();
+  const index = current.alchemy.findIndex((p) => p.id === potion.id);
+  if (index !== -1) {
+    current.alchemy[index] = potion;
+    saveSettings(current);
+  }
+};
+
+export const removePotion = (id: string): void => {
+  const current = loadSettings();
+  current.alchemy = current.alchemy.filter((p) => p.id !== id);
+  saveSettings(current);
+};
+
+/**
+ * Execute a potion (fetch its value from the API)
+ */
+export const executePotion = async (potion: AlchemyPotion): Promise<string> => {
+  try {
+    const fetchOptions: RequestInit = {
+      method: potion.method,
+      headers: potion.headers,
+    };
+
+    if (potion.method === "POST" && potion.body) {
+      fetchOptions.body = potion.body;
+    }
+
+    const response = await fetch(potion.url, fetchOptions);
+    const text = await response.text();
+
+    // Update last value and timestamp
+    potion.lastValue = text;
+    potion.lastFetched = Date.now();
+    updatePotion(potion);
+
+    return text;
+  } catch (error) {
+    console.error(`Failed to execute potion ${potion.name}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Get all alchemy placeholders by executing all potions
+ * Returns object like { "alchemy.weather": "sunny", "alchemy.time": "10:30" }
+ */
+export const getAlchemyPlaceholders = async (): Promise<Record<string, string>> => {
+  const potions = getAlchemy();
+  const result: Record<string, string> = {};
+
+  // Execute all potions in parallel
+  await Promise.all(
+    potions.map(async (potion) => {
+      try {
+        const value = await executePotion(potion);
+        result[`alchemy.${potion.name}`] = value;
+      } catch (error) {
+        console.error(`Failed to fetch potion ${potion.name}:`, error);
+        result[`alchemy.${potion.name}`] = `[Error: ${error}]`;
+      }
+    })
+  );
+
   return result;
 };
 

@@ -94,6 +94,15 @@ export const extractBookPlaceholders = (text: string): string[] => {
 };
 
 /**
+ * Extract ${alchemy.potionName} placeholders from text
+ * Returns array of potion names (without "alchemy." prefix)
+ */
+export const extractAlchemyPlaceholders = (text: string): string[] => {
+  const matches = text.match(/\$\{alchemy\.([a-zA-Z_][a-zA-Z0-9_]*)\}/g) || [];
+  return [...new Set(matches.map((m) => m.slice(10, -1)))]; // Remove ${alchemy. and }
+};
+
+/**
  * Replace placeholders in text with provided values
  * Supports: $0, ${0}, ${named}, ${book.field}
  * @param text - Template text
@@ -103,14 +112,21 @@ export const extractBookPlaceholders = (text: string): string[] => {
 export const replacePlaceholders = (
   text: string,
   values: Record<string, string> | string[],
-  bookValues?: Record<string, string>
+  bookAndAlchemyValues?: Record<string, string>
 ): string => {
   let result = text;
   
-  // First, replace ${book.field} placeholders if bookValues provided
-  if (bookValues) {
-    for (const [field, val] of Object.entries(bookValues)) {
-      result = result.split(`\${book.${field}}`).join(val);
+  // First, replace ${book.field} and ${alchemy.field} placeholders
+  if (bookAndAlchemyValues) {
+    for (const [field, val] of Object.entries(bookAndAlchemyValues)) {
+      // Check if this is an alchemy value (already has prefix)
+      if (field.startsWith("alchemy.")) {
+        // Replace ${alchemy.field} directly
+        result = result.split(`\${${field}}`).join(val);
+      } else {
+        // Regular book field, add book. prefix for replacement
+        result = result.split(`\${book.${field}}`).join(val);
+      }
     }
   }
   

@@ -1,6 +1,6 @@
-import { flattenObjectDot, extractPlaceholders, replacePlaceholders } from "../helpers";
+import { flattenObjectDot, extractPlaceholders, extractAlchemyPlaceholders, replacePlaceholders } from "../helpers";
 import { CommandExecutor } from "../commandExecutor";
-import { getBook } from "../grimoireSettings";
+import { getBook, getAlchemy, executePotion } from "../grimoireSettings";
 
 const commonIngredients = {
   schemaRules: `<schema_rules>
@@ -23,18 +23,44 @@ const commonIngredients = {
 const template = (recipe: string[]): CommandExecutor => {
   const text = recipe.join("\n");
   const placeholders = extractPlaceholders(text);
+  const alchemyPlaceholders = extractAlchemyPlaceholders(text);
   
   // Create arg definitions - numbered ones show $N, named show the name
   const argDefs = placeholders.map((p) => 
     /^\d+$/.test(p) ? `$${p}: string` : `${p}: string`
   );
 
-  const buildFn = (args?: string[]) => {
+  const buildFn = async (args?: string[]) => {
     // Get book values for ${book.field} replacement
     const bookValues = getBook();
     
+    // Fetch alchemy values for ${alchemy.potionName} replacement (only potions used in template)
+    const alchemyValues: Record<string, string> = {};
+    if (alchemyPlaceholders.length > 0) {
+      const allPotions = getAlchemy();
+      await Promise.all(
+        alchemyPlaceholders.map(async (potionName) => {
+          const potion = allPotions.find((p) => p.name === potionName);
+          if (potion) {
+            try {
+              const value = await executePotion(potion);
+              alchemyValues[`alchemy.${potionName}`] = value;
+            } catch (error) {
+              console.error(`Failed to execute potion ${potionName}:`, error);
+              alchemyValues[`alchemy.${potionName}`] = `[Error: ${error}]`;
+            }
+          } else {
+            alchemyValues[`alchemy.${potionName}`] = `[Potion not found: ${potionName}]`;
+          }
+        })
+      );
+    }
+    
+    // Combine book and alchemy values
+    const combinedValues = { ...bookValues, ...alchemyValues };
+    
     if (!args || args.length === 0) {
-      return replacePlaceholders(text, {}, bookValues);
+      return replacePlaceholders(text, {}, combinedValues);
     }
     
     // Build a map of placeholder names to provided values
@@ -45,7 +71,7 @@ const template = (recipe: string[]): CommandExecutor => {
       }
     });
     
-    return replacePlaceholders(text, valuesMap, bookValues);
+    return replacePlaceholders(text, valuesMap, combinedValues);
   };
 
   return [buildFn, ...argDefs];

@@ -19,18 +19,45 @@ CMD+D opens a 1 liner that enables you to run commands that copy a template to c
 In dev:
 CMD+D+Shift
 
-### Use cases
+### Use Cases
 
-- You're writing system messages for tool, bots etc.. well just hit CMD+D and pick a template to paste and populate.
-- Need to run a node command quick? CMD+D + key
+**Quick text generation:**
+- Hit CMD+D, type `email.signature`, get your full signature instantly
+- Use `${book.name}` and `${book.company}` for personalized templates
+
+**Dynamic content:**
+- Create a daily standup template with `${alchemy.weather}` and `${alchemy.date}`
+- Fetch live data from APIs directly in your templates
+
+**Code snippets:**
+- Predefined templates for comments, functions, classes
+- Custom templates for your own coding patterns
+
+**System automation:**
+- Control smart home devices (lights, TV, etc.)
+- Run node commands (UUID generation, etc.)
+
+**AI prompts:**
+- Store and quickly access AI system messages
+- Combine static info with dynamic API data
 
 ### Features
 
-- search has autocomplete for available template names and their args
-- tab to fill in the auto complete
-- tab tice to clear
-- templates can be grouped by category (e.g. comments.comment_top hello world)
-- can run node commands (e.g. uuid, etc..)
+- **Quick Command Input** (CMD+D): Search with autocomplete, tab completion, instant execution
+- **Command Grimoire** (GUI): Full command browser with WoW quest log aesthetic
+  - Browse all "Spells" (executables) and "Scrolls" (templates)
+  - Create/edit/delete custom templates with visual editor
+  - Test templates with live preview
+- **The Book**: Static dictionary for personal info (name, email, signature, etc.)
+  - Reference as `${book.field}` in templates
+- **Alchemy Lab**: Dynamic API-fetched values in templates
+  - Configure HTTP requests as "potions" (GET/POST, headers, body)
+  - Reference as `${alchemy.potion}` in templates
+  - Templates await all API calls before execution
+- **Smart Autocomplete**: As you type `${book.` or `${alchemy.`, get instant suggestions
+- **Categories**: Organize commands by category/subcategory (e.g., `home.living-room.lights_on`)
+- **Custom Templates**: User-created templates stored in `~/.copyai-custom-templates.json`
+- **Settings**: API keys (OpenAI, OpenRouter) stored securely in `~/.copyai-grimoire-settings.json`
 
 ### why npm and not pnpm for electron app?
 ... https://github.com/electron/forge/pull/3209

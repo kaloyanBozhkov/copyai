@@ -146,18 +146,40 @@ export const templateRecipes = {
 | `$N` | `$0`, `$1` | Numbered placeholder (no braces) |
 | `${N}` | `${0}`, `${1}` | Numbered placeholder (with braces) |
 | `${name}` | `${title}`, `${user}` | Named placeholder (user input) |
-| `${book.field}` | `${book.name}`, `${book.email}` | Auto-filled from Grimoire Settings |
+| `${book.field}` | `${book.name}`, `${book.email}` | Auto-filled from The Book (static values) |
+| `${alchemy.potion}` | `${alchemy.weather}`, `${alchemy.date}` | Dynamic values from external APIs |
 
-### Book Placeholders (Auto-fill)
+### Book Placeholders (Static Auto-fill)
 
-The `${book.field}` syntax allows templates to reference user-defined values from the Grimoire Settings. These are **not** prompted as arguments - they are automatically filled in.
+The `${book.field}` syntax allows templates to reference user-defined **static** values. These are **not** prompted as arguments - they are automatically filled in at execution time.
 
 **Use cases:**
 - Personal information: `${book.name}`, `${book.email}`, `${book.company}`
 - Signatures: `${book.signature}`
 - Common phrases: `${book.greeting}`, `${book.closing}`
 
-Book fields are configured in **Grimoire → Settings → The Book**.
+Book fields are configured in **Grimoire → Book button** (top toolbar).
+
+### Alchemy Placeholders (Dynamic API-fetched)
+
+The `${alchemy.potion}` syntax allows templates to fetch **dynamic** values from external APIs. Each potion executes an HTTP request (GET/POST) and the response is injected into the template.
+
+**Use cases:**
+- Current data: `${alchemy.weather}`, `${alchemy.date}`, `${alchemy.time}`
+- API responses: `${alchemy.github_stars}`, `${alchemy.stock_price}`
+- Dynamic content: `${alchemy.quote_of_day}`, `${alchemy.crypto_btc}`
+
+**Execution behavior:**
+- All potions in a template are executed **in parallel**
+- Template waits for all potions to resolve before filling placeholders
+- Errors are handled gracefully with `[Error: ...]` placeholders
+
+Alchemy potions are configured in **Grimoire → Alchemy button** (top toolbar). Each potion defines:
+- **Name**: Used in `${alchemy.name}` syntax
+- **Method**: GET or POST
+- **URL**: API endpoint
+- **Headers**: Optional JSON headers (e.g., `{"Authorization": "Bearer token"}`)
+- **Body**: Optional JSON body for POST requests
 
 ### Example: Simple Template
 
@@ -193,6 +215,48 @@ Usage: `welcome John, Acme Corp` →
 ```
 Hello John!
 Welcome to Acme Corp.
+```
+
+### Example: Template with Book Fields
+
+```typescript
+email: {
+  signature: [
+    "Best regards,",
+    "${book.name}",
+    "${book.title} at ${book.company}",
+    "${book.email}",
+  ],
+},
+```
+
+Output (with Book configured):
+```
+Best regards,
+John Doe
+Senior Developer at Acme Corp
+john@acme.com
+```
+
+### Example: Template with Alchemy Potions
+
+```typescript
+weather_report: {
+  daily: [
+    "Good morning!",
+    "Today's weather: ${alchemy.weather}",
+    "Current time: ${alchemy.time}",
+    "Have a great ${0}!",
+  ],
+},
+```
+
+Usage: `daily Tuesday` → *(fetches APIs, then outputs)*
+```
+Good morning!
+Today's weather: Sunny, 72°F
+Current time: 09:30 AM
+Have a great Tuesday!
 ```
 
 ### Template Conversion

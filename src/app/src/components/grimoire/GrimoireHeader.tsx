@@ -7,6 +7,8 @@ import {
   Scroll,
   Zap,
   Settings,
+  Book,
+  Beaker,
 } from "lucide-react";
 
 interface GrimoireHeaderProps {
@@ -19,6 +21,10 @@ interface GrimoireHeaderProps {
   onCreateTemplate: () => void;
   onOpenSettings: () => void;
   isSettingsOpen: boolean;
+  onOpenBook: () => void;
+  isBookOpen: boolean;
+  onOpenAlchemy: () => void;
+  isAlchemyOpen: boolean;
 }
 
 export function GrimoireHeader({
@@ -31,6 +37,10 @@ export function GrimoireHeader({
   onCreateTemplate,
   onOpenSettings,
   isSettingsOpen,
+  onOpenBook,
+  isBookOpen,
+  onOpenAlchemy,
+  isAlchemyOpen,
 }: GrimoireHeaderProps) {
   return (
     <div className="flex items-center gap-4 border-b border-grimoire-border bg-gradient-to-b from-grimoire-bg-secondary/80 to-grimoire-bg/60 px-4 py-2 backdrop-blur-sm">
@@ -103,6 +113,32 @@ export function GrimoireHeader({
         >
           <Plus size={16} />
           <span>Inscribe Scroll</span>
+        </button>
+
+        {/* Book Button */}
+        <button
+          onClick={onOpenBook}
+          className={`p-2 rounded border transition-all ${
+            isBookOpen
+              ? "bg-grimoire-accent/20 text-grimoire-accent-bright border-grimoire-accent/50"
+              : "bg-black/20 text-grimoire-text-dim border-grimoire-border/50 hover:text-grimoire-text hover:border-grimoire-border"
+          }`}
+          title="The Book"
+        >
+          <Book size={16} />
+        </button>
+
+        {/* Alchemy Button */}
+        <button
+          onClick={onOpenAlchemy}
+          className={`p-2 rounded border transition-all ${
+            isAlchemyOpen
+              ? "bg-grimoire-purple/20 text-grimoire-purple-bright border-grimoire-purple/50"
+              : "bg-black/20 text-grimoire-text-dim border-grimoire-border/50 hover:text-grimoire-text hover:border-grimoire-border"
+          }`}
+          title="Alchemy Lab"
+        >
+          <Beaker size={16} />
         </button>
 
         {/* Settings Button */}

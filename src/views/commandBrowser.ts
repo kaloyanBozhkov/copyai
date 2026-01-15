@@ -17,6 +17,12 @@ import {
   setBookField,
   removeBookField,
   getBook,
+  addPotion,
+  updatePotion,
+  removePotion,
+  getPotion,
+  executePotion,
+  getAlchemyPlaceholders,
   GrimoireSettings,
 } from "../kitchen/grimoireSettings";
 
@@ -243,10 +249,9 @@ const setupCommandBrowserIPC = () => {
   // Execute/copy a template to test it
   ipcMain.on(
     "grimoire-execute-template",
-    (event, { messageRecipe, args }: { messageRecipe: string[]; args: string[] }) => {
+    async (event, { messageRecipe, args }: { messageRecipe: string[]; args: string[] }) => {
       const text = messageRecipe.join("\n");
       const placeholders = extractPlaceholders(text);
-      const bookValues = getBook();
       
       // Build values map from args array
       const valuesMap: Record<string, string> = {};
@@ -255,8 +260,20 @@ const setupCommandBrowserIPC = () => {
           valuesMap[placeholder] = args[index];
         }
       });
+
+      // Fetch book and alchemy values
+      const bookValues = getBook();
+      let alchemyValues: Record<string, string> = {};
+      try {
+        alchemyValues = await getAlchemyPlaceholders();
+      } catch (error) {
+        console.error("Failed to fetch alchemy values:", error);
+      }
       
-      const result = replacePlaceholders(text, valuesMap, bookValues);
+      // Merge all book + alchemy values for special placeholder replacement
+      const allValues = { ...bookValues, ...alchemyValues };
+      
+      const result = replacePlaceholders(text, valuesMap, allValues);
       event.reply("grimoire-template-result", result);
     }
   );
@@ -294,6 +311,36 @@ const setupCommandBrowserIPC = () => {
     removeBookField(field);
     event.reply("grimoire-settings-data", getSettings());
   });
+
+  ipcMain.on("grimoire-add-potion", (event, potion) => {
+    addPotion(potion);
+    event.reply("grimoire-settings-data", getSettings());
+  });
+
+  ipcMain.on("grimoire-update-potion", (event, potion) => {
+    updatePotion(potion);
+    event.reply("grimoire-settings-data", getSettings());
+  });
+
+  ipcMain.on("grimoire-remove-potion", (event, id: string) => {
+    removePotion(id);
+    event.reply("grimoire-settings-data", getSettings());
+  });
+
+  ipcMain.on("grimoire-execute-potion", async (event, id: string) => {
+    try {
+      const potion = getPotion(id);
+      if (!potion) {
+        event.reply("grimoire-potion-result", { error: "Potion not found" });
+        return;
+      }
+      const result = await executePotion(potion);
+      event.reply("grimoire-potion-result", { result, potion });
+      event.reply("grimoire-settings-data", getSettings());
+    } catch (error) {
+      event.reply("grimoire-potion-result", { error: String(error) });
+    }
+  });
 };
 
 const cleanupCommandBrowserIPC = () => {
@@ -309,6 +356,10 @@ const cleanupCommandBrowserIPC = () => {
   ipcMain.removeAllListeners("grimoire-set-api-key");
   ipcMain.removeAllListeners("grimoire-set-book-field");
   ipcMain.removeAllListeners("grimoire-remove-book-field");
+  ipcMain.removeAllListeners("grimoire-add-potion");
+  ipcMain.removeAllListeners("grimoire-update-potion");
+  ipcMain.removeAllListeners("grimoire-remove-potion");
+  ipcMain.removeAllListeners("grimoire-execute-potion");
 };
 
 export const closeCommandBrowser = () => {
