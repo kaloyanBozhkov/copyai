@@ -7,18 +7,24 @@ import {
   getCustomTemplatesAsComposers,
   onCustomTemplatesChange,
 } from "./customTemplates";
+import {
+  getCustomSpellsAsExecutors,
+  onCustomSpellsChange,
+} from "./customSpells";
 
 export { clearHistory };
 
-// Get current utensils (always fresh, includes custom templates)
+// Get current utensils (always fresh, includes custom templates and spells)
 const getUtensils = () => ({
   ...execs,
   ...messageComposers,
   ...getCustomTemplatesAsComposers(),
+  ...getCustomSpellsAsExecutors(),
 } as Record<string, CommandExecutor | Record<string, unknown>>);
 
-// Subscribe to custom template changes to refresh keys
+// Subscribe to custom template/spell changes to refresh keys
 onCustomTemplatesChange(() => refreshCommandKeys());
+onCustomSpellsChange(() => refreshCommandKeys());
 
 // Filter out non-executable keys (subcategories)
 const isExecutable = (key: string): boolean => {
@@ -34,6 +40,7 @@ const getBaseKeys = () => [
   ...Object.keys(messageComposers),
   ...Object.keys(execs),
   ...Object.keys(getCustomTemplatesAsComposers()),
+  ...Object.keys(getCustomSpellsAsExecutors()),
 ].filter(isExecutable);
 
 export const utensilsKeys = getSortedKeys();

@@ -4,19 +4,23 @@ import { ipcRenderer } from "@/utils/electron";
 import { CategorySidebar } from "./CategorySidebar";
 import { CommandDetail } from "./CommandDetail";
 import { CreateTemplateModal } from "./CreateTemplateModal";
+import { CreateSpellModal } from "./CreateSpellModal";
 import { GrimoireHeader } from "./GrimoireHeader";
 import { SettingsPanel } from "./SettingsPanel";
 import { BookModal } from "./BookModal";
 import { AlchemyModal } from "./AlchemyModal";
-import type { CommandsData, CommandInfo, CustomTemplate, GrimoireSettings } from "./types";
+import type { CommandsData, CommandInfo, CustomTemplate, CustomSpell, GrimoireSettings } from "./types";
 
 export default function CommandGrimoire() {
   const [commandsData, setCommandsData] = useState<CommandsData | null>(null);
   const [settings, setSettings] = useState<GrimoireSettings | null>(null);
   const [selectedCommand, setSelectedCommand] = useState<CommandInfo | null>(null);
   const [selectedCustomTemplate, setSelectedCustomTemplate] = useState<CustomTemplate | null>(null);
+  const [selectedCustomSpell, setSelectedCustomSpell] = useState<CustomSpell | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreateSpellModalOpen, setIsCreateSpellModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<CustomTemplate | null>(null);
+  const [editingSpell, setEditingSpell] = useState<CustomSpell | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isBookOpen, setIsBookOpen] = useState(false);
   const [isAlchemyOpen, setIsAlchemyOpen] = useState(false);
@@ -52,14 +56,43 @@ export default function CommandGrimoire() {
     };
   }, []);
 
+  // Sync selected items with updated commandsData
+  useEffect(() => {
+    if (!commandsData) return;
+    
+    // Update selected custom template if it exists
+    if (selectedCustomTemplate) {
+      const updated = commandsData.customTemplates.find(t => t.id === selectedCustomTemplate.id);
+      if (updated && JSON.stringify(updated) !== JSON.stringify(selectedCustomTemplate)) {
+        setSelectedCustomTemplate(updated);
+      }
+    }
+    
+    // Update selected custom spell if it exists
+    if (selectedCustomSpell) {
+      const updated = (commandsData.customSpells || []).find(s => s.id === selectedCustomSpell.id);
+      if (updated && JSON.stringify(updated) !== JSON.stringify(selectedCustomSpell)) {
+        setSelectedCustomSpell(updated);
+      }
+    }
+  }, [commandsData, selectedCustomTemplate, selectedCustomSpell]);
+
   const handleSelectCommand = useCallback((command: CommandInfo | null) => {
     setSelectedCommand(command);
     setSelectedCustomTemplate(null);
+    setSelectedCustomSpell(null);
   }, []);
 
   const handleSelectCustomTemplate = useCallback((template: CustomTemplate | null) => {
     setSelectedCustomTemplate(template);
     setSelectedCommand(null);
+    setSelectedCustomSpell(null);
+  }, []);
+
+  const handleSelectCustomSpell = useCallback((spell: CustomSpell | null) => {
+    setSelectedCustomSpell(spell);
+    setSelectedCommand(null);
+    setSelectedCustomTemplate(null);
   }, []);
 
   const handleDeleteCustomTemplate = useCallback((id: string) => {
@@ -68,6 +101,13 @@ export default function CommandGrimoire() {
       setSelectedCustomTemplate(null);
     }
   }, [selectedCustomTemplate]);
+
+  const handleDeleteCustomSpell = useCallback((id: string) => {
+    ipcRenderer.send("grimoire-remove-spell", id);
+    if (selectedCustomSpell?.id === id) {
+      setSelectedCustomSpell(null);
+    }
+  }, [selectedCustomSpell]);
 
   const handleCreateTemplate = useCallback(
     (template: Omit<CustomTemplate, "id" | "createdAt">) => {
@@ -89,6 +129,26 @@ export default function CommandGrimoire() {
     []
   );
 
+  const handleCreateSpell = useCallback(
+    (spell: Omit<CustomSpell, "id" | "createdAt">) => {
+      ipcRenderer.send("grimoire-add-spell", spell);
+      setIsCreateSpellModalOpen(false);
+    },
+    []
+  );
+
+  const handleEditCustomSpell = useCallback((spell: CustomSpell) => {
+    setEditingSpell(spell);
+  }, []);
+
+  const handleUpdateSpell = useCallback(
+    (id: string, spell: Omit<CustomSpell, "id" | "createdAt">) => {
+      ipcRenderer.send("grimoire-update-spell", { id, updates: spell });
+      setEditingSpell(null);
+    },
+    []
+  );
+
   const handleClose = () => ipcRenderer.send("grimoire-close");
   const handleMinimize = () => ipcRenderer.send("grimoire-minimize");
 
@@ -98,6 +158,7 @@ export default function CommandGrimoire() {
       // Clear selection when opening settings
       setSelectedCommand(null);
       setSelectedCustomTemplate(null);
+      setSelectedCustomSpell(null);
     }
   }, [isSettingsOpen]);
 
@@ -132,6 +193,7 @@ export default function CommandGrimoire() {
         filter={filter}
         onFilterChange={setFilter}
         onCreateTemplate={() => setIsCreateModalOpen(true)}
+        onCreateSpell={() => setIsCreateSpellModalOpen(true)}
         onOpenSettings={handleOpenSettings}
         isSettingsOpen={isSettingsOpen}
         onOpenBook={handleOpenBook}
@@ -149,8 +211,10 @@ export default function CommandGrimoire() {
               commandsData={commandsData}
               selectedCommand={selectedCommand}
               selectedCustomTemplate={selectedCustomTemplate}
+              selectedCustomSpell={selectedCustomSpell}
               onSelectCommand={handleSelectCommand}
               onSelectCustomTemplate={handleSelectCustomTemplate}
+              onSelectCustomSpell={handleSelectCustomSpell}
               filter={filter}
               searchQuery={searchQuery}
             />
@@ -158,8 +222,11 @@ export default function CommandGrimoire() {
             <CommandDetail
               command={selectedCommand}
               customTemplate={selectedCustomTemplate}
+              customSpell={selectedCustomSpell}
               onDeleteCustomTemplate={handleDeleteCustomTemplate}
               onEditCustomTemplate={handleEditCustomTemplate}
+              onDeleteCustomSpell={handleDeleteCustomSpell}
+              onEditCustomSpell={handleEditCustomSpell}
             />
           </>
         )}
@@ -207,7 +274,40 @@ export default function CommandGrimoire() {
       {isAlchemyOpen && settings && (
         <AlchemyModal
           potions={settings.alchemy || []}
+          apiKeys={settings.apiKeys}
           onClose={() => setIsAlchemyOpen(false)}
+        />
+      )}
+
+      {isCreateSpellModalOpen && (
+        <CreateSpellModal
+          existingCategories={[
+            ...new Set([
+              ...Object.keys(commandsData.execs),
+              ...(commandsData.customSpells || []).map((s) => s.category),
+            ]),
+          ]}
+          bookFields={settings.book}
+          alchemyPotions={settings.alchemy || []}
+          onClose={() => setIsCreateSpellModalOpen(false)}
+          onCreate={handleCreateSpell}
+        />
+      )}
+
+      {editingSpell && (
+        <CreateSpellModal
+          existingCategories={[
+            ...new Set([
+              ...Object.keys(commandsData.execs),
+              ...(commandsData.customSpells || []).map((s) => s.category),
+            ]),
+          ]}
+          bookFields={settings.book}
+          alchemyPotions={settings.alchemy || []}
+          existingSpell={editingSpell}
+          onClose={() => setEditingSpell(null)}
+          onCreate={handleCreateSpell}
+          onUpdate={handleUpdateSpell}
         />
       )}
     </div>

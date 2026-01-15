@@ -3,9 +3,10 @@ export interface CommandInfo {
   fullKey: string;
   category: string;
   subcategory?: string;
-  type: "exec" | "template" | "custom-template";
+  type: "exec" | "template" | "custom-template" | "custom-spell";
   args: string[];
   messageRecipe?: string[];
+  systemMessageTemplate?: string;
   isCustom?: boolean;
 }
 
@@ -23,10 +24,20 @@ export interface CustomTemplate {
   createdAt: number;
 }
 
+export interface CustomSpell {
+  id: string;
+  name: string;
+  category: string;
+  systemMessageTemplate: string;
+  retryCount: number;
+  createdAt: number;
+}
+
 export interface CommandsData {
   execs: Record<string, CategoryGroup>;
   templates: Record<string, CategoryGroup>;
   customTemplates: CustomTemplate[];
+  customSpells: CustomSpell[];
 }
 
 export interface AlchemyPotion {

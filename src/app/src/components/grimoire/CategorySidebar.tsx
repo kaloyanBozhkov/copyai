@@ -1,13 +1,15 @@
 import { useState, useMemo } from "react";
 import { ChevronDown, ChevronRight, Zap, Scroll, Wand2, Sparkles } from "lucide-react";
-import type { CommandsData, CommandInfo, CustomTemplate, CategoryGroup } from "./types";
+import type { CommandsData, CommandInfo, CustomTemplate, CustomSpell, CategoryGroup } from "./types";
 
 interface CategorySidebarProps {
   commandsData: CommandsData;
   selectedCommand: CommandInfo | null;
   selectedCustomTemplate: CustomTemplate | null;
+  selectedCustomSpell: CustomSpell | null;
   onSelectCommand: (command: CommandInfo | null) => void;
   onSelectCustomTemplate: (template: CustomTemplate | null) => void;
+  onSelectCustomSpell: (spell: CustomSpell | null) => void;
   filter: "all" | "execs" | "templates";
   searchQuery: string;
 }
@@ -158,12 +160,15 @@ export function CategorySidebar({
   commandsData,
   selectedCommand,
   selectedCustomTemplate,
+  selectedCustomSpell,
   onSelectCommand,
   onSelectCustomTemplate,
+  onSelectCustomSpell,
   filter,
   searchQuery,
 }: CategorySidebarProps) {
   const [customExpanded, setCustomExpanded] = useState(true);
+  const [customSpellsExpanded, setCustomSpellsExpanded] = useState(true);
 
   const showExecs = filter === "all" || filter === "execs";
   const showTemplates = filter === "all" || filter === "templates";
@@ -177,11 +182,21 @@ export function CategorySidebar({
     );
   }, [commandsData.customTemplates, searchQuery]);
 
+  const filteredCustomSpells = useMemo(() => {
+    const spells = commandsData.customSpells || [];
+    if (!searchQuery) return spells;
+    const q = searchQuery.toLowerCase();
+    return spells.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) || s.category.toLowerCase().includes(q)
+    );
+  }, [commandsData.customSpells, searchQuery]);
+
   return (
     <div className="w-80 border-r border-grimoire-border bg-gradient-to-br from-grimoire-bg-secondary/40 to-grimoire-bg/60 backdrop-blur-sm overflow-hidden flex flex-col">
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-        {/* Custom Templates Section */}
-        {showTemplates && filteredCustomTemplates.length > 0 && (
+        {/* Your Creations Section */}
+        {(showTemplates && filteredCustomTemplates.length > 0) || (showExecs && filteredCustomSpells.length > 0) ? (
           <div className="border-b border-grimoire-border">
             <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-grimoire-gold/20 to-transparent border-b border-grimoire-gold/30">
               <Sparkles size={14} className="text-grimoire-gold" />
@@ -190,47 +205,93 @@ export function CategorySidebar({
               </span>
             </div>
 
-            <div className="border-b border-grimoire-border/30">
-              <button
-                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/5 transition-colors"
-                onClick={() => setCustomExpanded(!customExpanded)}
-              >
-                <div className="text-grimoire-text-dim">
-                  {customExpanded ? (
-                    <ChevronDown size={14} />
-                  ) : (
-                    <ChevronRight size={14} />
-                  )}
-                </div>
-                <span className="flex-1 text-grimoire-purple-bright font-fantasy text-sm font-medium">
-                  Custom Scrolls
-                </span>
-                <span className="text-xs text-grimoire-purple-bright bg-grimoire-purple/20 px-2 py-0.5 rounded">
-                  {filteredCustomTemplates.length}
-                </span>
-              </button>
+            {/* Custom Scrolls */}
+            {showTemplates && filteredCustomTemplates.length > 0 && (
+              <div className="border-b border-grimoire-border/30">
+                <button
+                  className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/5 transition-colors"
+                  onClick={() => setCustomExpanded(!customExpanded)}
+                >
+                  <div className="text-grimoire-text-dim">
+                    {customExpanded ? (
+                      <ChevronDown size={14} />
+                    ) : (
+                      <ChevronRight size={14} />
+                    )}
+                  </div>
+                  <span className="flex-1 text-grimoire-purple-bright font-fantasy text-sm font-medium">
+                    Custom Scrolls
+                  </span>
+                  <span className="text-xs text-grimoire-purple-bright bg-grimoire-purple/20 px-2 py-0.5 rounded">
+                    {filteredCustomTemplates.length}
+                  </span>
+                </button>
 
-              {customExpanded && (
-                <div className="bg-black/10">
-                  {filteredCustomTemplates.map((template) => (
-                    <button
-                      key={template.id}
-                      className={`w-full flex items-center gap-2 px-3 py-2 pl-9 text-left text-sm transition-all ${
-                        selectedCustomTemplate?.id === template.id
-                          ? "bg-grimoire-purple/20 text-grimoire-purple-bright border-l-2 border-grimoire-purple-bright"
-                          : "text-grimoire-text-dim hover:text-grimoire-text hover:bg-white/5 border-l-2 border-transparent"
-                      }`}
-                      onClick={() => onSelectCustomTemplate(template)}
-                    >
-                      <Scroll size={12} className="text-grimoire-purple-bright" />
-                      <span>{template.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+                {customExpanded && (
+                  <div className="bg-black/10">
+                    {filteredCustomTemplates.map((template) => (
+                      <button
+                        key={template.id}
+                        className={`w-full flex items-center gap-2 px-3 py-2 pl-9 text-left text-sm transition-all ${
+                          selectedCustomTemplate?.id === template.id
+                            ? "bg-grimoire-purple/20 text-grimoire-purple-bright border-l-2 border-grimoire-purple-bright"
+                            : "text-grimoire-text-dim hover:text-grimoire-text hover:bg-white/5 border-l-2 border-transparent"
+                        }`}
+                        onClick={() => onSelectCustomTemplate(template)}
+                      >
+                        <Scroll size={12} className="text-grimoire-purple-bright" />
+                        <span>{template.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Custom AI Spells */}
+            {showExecs && filteredCustomSpells.length > 0 && (
+              <div className="border-b border-grimoire-border/30 last:border-b-0">
+                <button
+                  className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/5 transition-colors"
+                  onClick={() => setCustomSpellsExpanded(!customSpellsExpanded)}
+                >
+                  <div className="text-grimoire-text-dim">
+                    {customSpellsExpanded ? (
+                      <ChevronDown size={14} />
+                    ) : (
+                      <ChevronRight size={14} />
+                    )}
+                  </div>
+                  <span className="flex-1 text-grimoire-accent-bright font-fantasy text-sm font-medium">
+                    Custom AI Spells
+                  </span>
+                  <span className="text-xs text-grimoire-accent-bright bg-grimoire-accent/20 px-2 py-0.5 rounded">
+                    {filteredCustomSpells.length}
+                  </span>
+                </button>
+
+                {customSpellsExpanded && (
+                  <div className="bg-black/10">
+                    {filteredCustomSpells.map((spell) => (
+                      <button
+                        key={spell.id}
+                        className={`w-full flex items-center gap-2 px-3 py-2 pl-9 text-left text-sm transition-all ${
+                          selectedCustomSpell?.id === spell.id
+                            ? "bg-grimoire-accent/20 text-grimoire-accent-bright border-l-2 border-grimoire-accent-bright"
+                            : "text-grimoire-text-dim hover:text-grimoire-text hover:bg-white/5 border-l-2 border-transparent"
+                        }`}
+                        onClick={() => onSelectCustomSpell(spell)}
+                      >
+                        <Zap size={12} className="text-grimoire-accent-bright" />
+                        <span>{spell.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        )}
+        ) : null}
 
         {/* Executable Commands Section */}
         {showExecs && (

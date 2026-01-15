@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   X,
   Beaker,
@@ -10,18 +10,21 @@ import {
   Edit2,
   ChevronDown,
   ChevronRight,
+  Key,
 } from "lucide-react";
 import { ipcRenderer } from "@/utils/electron";
-import type { AlchemyPotion } from "./types";
+import type { AlchemyPotion, GrimoireSettings } from "./types";
 import { ActionButton } from "../atoms/ActionButton.atom";
 
 interface AlchemyModalProps {
   potions: AlchemyPotion[];
+  apiKeys: GrimoireSettings["apiKeys"];
   onClose: () => void;
 }
 
 export function AlchemyModal({
   potions: initialPotions,
+  apiKeys,
   onClose,
 }: AlchemyModalProps) {
   const [potions, setPotions] = useState<AlchemyPotion[]>(initialPotions);
@@ -335,6 +338,7 @@ export function AlchemyModal({
         ) : (
           <PotionEditor
             potion={editingPotion}
+            apiKeys={apiKeys}
             onSave={handleSavePotion}
             onCancel={() => {
               setEditingPotion(null);
@@ -395,13 +399,17 @@ export function AlchemyModal({
 
 interface PotionEditorProps {
   potion: AlchemyPotion;
+  apiKeys: GrimoireSettings["apiKeys"];
   onSave: (potion: AlchemyPotion) => void;
   onCancel: () => void;
   isCreating: boolean;
 }
 
+type AutocompleteField = "url" | "body" | "header" | null;
+
 function PotionEditor({
   potion: initialPotion,
+  apiKeys,
   onSave,
   onCancel,
   isCreating,
@@ -409,6 +417,96 @@ function PotionEditor({
   const [potion, setPotion] = useState(initialPotion);
   const [headerKey, setHeaderKey] = useState("");
   const [headerValue, setHeaderValue] = useState("");
+  const [activeField, setActiveField] = useState<AutocompleteField>(null);
+  const [envSuggestions, setEnvSuggestions] = useState<string[]>([]);
+  
+  const urlRef = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const headerValueRef = useRef<HTMLInputElement>(null);
+
+  // Available env keys from apiKeys
+  const envKeys = Object.keys(apiKeys).filter((k) => apiKeys[k as keyof typeof apiKeys]);
+
+  const checkEnvAutocomplete = (value: string, cursorPos: number): string[] => {
+    if (envKeys.length === 0) return [];
+    
+    const textBeforeCursor = value.slice(0, cursorPos);
+    const envMatch = textBeforeCursor.match(/\$\{env\.(\w*)$/);
+    
+    if (envMatch) {
+      const searchTerm = envMatch[1].toLowerCase();
+      // If no search term, show all; otherwise filter
+      return searchTerm
+        ? envKeys.filter((key) => key.toLowerCase().startsWith(searchTerm))
+        : envKeys;
+    }
+    return [];
+  };
+
+  const handleUrlChange = (value: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    setPotion({ ...potion, url: value });
+    const cursorPos = e.target.selectionStart ?? value.length;
+    const suggestions = checkEnvAutocomplete(value, cursorPos);
+    setEnvSuggestions(suggestions);
+    setActiveField(suggestions.length > 0 ? "url" : null);
+  };
+
+  const handleBodyChange = (value: string, e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setPotion({ ...potion, body: value });
+    const cursorPos = e.target.selectionStart ?? value.length;
+    const suggestions = checkEnvAutocomplete(value, cursorPos);
+    setEnvSuggestions(suggestions);
+    setActiveField(suggestions.length > 0 ? "body" : null);
+  };
+
+  const handleHeaderValueChange = (value: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    setHeaderValue(value);
+    const cursorPos = e.target.selectionStart ?? value.length;
+    const suggestions = checkEnvAutocomplete(value, cursorPos);
+    setEnvSuggestions(suggestions);
+    setActiveField(suggestions.length > 0 ? "header" : null);
+  };
+
+  const handleEnvSelect = (envKey: string) => {
+    const insertEnvPlaceholder = (
+      currentValue: string,
+      ref: React.RefObject<HTMLInputElement | HTMLTextAreaElement | null>
+    ): string => {
+      const cursorPos = ref.current?.selectionStart || currentValue.length;
+      const textBeforeCursor = currentValue.slice(0, cursorPos);
+      const textAfterCursor = currentValue.slice(cursorPos);
+      const match = textBeforeCursor.match(/\$\{env\.(\w*)$/);
+      if (match) {
+        const beforeMatch = textBeforeCursor.slice(0, match.index);
+        return `${beforeMatch}\${env.${envKey}}${textAfterCursor}`;
+      }
+      return currentValue;
+    };
+
+    if (activeField === "url") {
+      const newUrl = insertEnvPlaceholder(potion.url, urlRef);
+      setPotion({ ...potion, url: newUrl });
+      urlRef.current?.focus();
+    } else if (activeField === "body") {
+      const newBody = insertEnvPlaceholder(potion.body || "", bodyRef);
+      setPotion({ ...potion, body: newBody });
+      bodyRef.current?.focus();
+    } else if (activeField === "header") {
+      const newValue = insertEnvPlaceholder(headerValue, headerValueRef);
+      setHeaderValue(newValue);
+      headerValueRef.current?.focus();
+    }
+
+    setActiveField(null);
+    setEnvSuggestions([]);
+  };
+
+  const closeAutocomplete = () => {
+    setTimeout(() => {
+      setActiveField(null);
+      setEnvSuggestions([]);
+    }, 150);
+  };
 
   const handleAddHeader = () => {
     if (!headerKey.trim()) return;
@@ -503,10 +601,15 @@ function PotionEditor({
       {/* URL */}
       <div className="space-y-2">
         <label className="text-grimoire-text font-fantasy text-sm">URL</label>
+        <p className="text-grimoire-text-dim text-xs">
+          Use <code className="px-1 py-0.5 bg-black/30 rounded text-grimoire-green font-grimoire">${"{env.KEY}"}</code> to inject API keys
+        </p>
         <input
+          ref={urlRef}
           type="text"
           value={potion.url}
-          onChange={(e) => setPotion({ ...potion, url: e.target.value })}
+          onChange={(e) => handleUrlChange(e.target.value, e)}
+          onBlur={closeAutocomplete}
           placeholder="https://api.example.com/endpoint"
           className={`w-full px-3 py-2 bg-black/30 border rounded text-grimoire-text text-sm font-mono placeholder:text-grimoire-text-dim focus:outline-none transition-all ${
             urlError
@@ -514,6 +617,23 @@ function PotionEditor({
               : "border-grimoire-border focus:border-grimoire-purple focus:ring-1 focus:ring-grimoire-purple"
           }`}
         />
+        {activeField === "url" && envSuggestions.length > 0 && (
+          <div className="mt-1 bg-grimoire-bg-secondary border border-grimoire-green/50 rounded shadow-xl max-h-32 overflow-y-auto">
+            {envSuggestions.map((envKey) => (
+              <button
+                key={envKey}
+                className="w-full px-3 py-2 flex items-center gap-2 text-sm hover:bg-grimoire-green/10 transition-colors text-left"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleEnvSelect(envKey)}
+              >
+                <Key size={12} className="text-grimoire-green" />
+                <code className="text-grimoire-green font-grimoire text-xs">
+                  ${"{env." + envKey + "}"}
+                </code>
+              </button>
+            ))}
+          </div>
+        )}
         {urlError && (
           <p className="text-grimoire-red text-xs">
             Please enter a valid URL starting with http:// or https://
@@ -526,6 +646,9 @@ function PotionEditor({
         <label className="text-grimoire-text font-fantasy text-sm">
           Headers
         </label>
+        <p className="text-grimoire-text-dim text-xs">
+          Use <code className="px-1 py-0.5 bg-black/30 rounded text-grimoire-green font-grimoire">${"{env.KEY}"}</code> to inject API keys from settings
+        </p>
         {Object.entries(potion.headers).length > 0 && (
           <div className="space-y-2 mb-2">
             {Object.entries(potion.headers).map(([key, value]) => (
@@ -555,10 +678,12 @@ function PotionEditor({
             className="flex-1 px-3 py-2 bg-black/30 border border-grimoire-border rounded text-grimoire-text text-sm font-mono placeholder:text-grimoire-text-dim focus:outline-none focus:border-grimoire-purple focus:ring-1 focus:ring-grimoire-purple transition-all"
           />
           <input
+            ref={headerValueRef}
             type="text"
             value={headerValue}
-            onChange={(e) => setHeaderValue(e.target.value)}
-            placeholder="Value"
+            onChange={(e) => handleHeaderValueChange(e.target.value, e)}
+            onBlur={closeAutocomplete}
+            placeholder="Value or ${env.API_KEY}"
             className="flex-1 px-3 py-2 bg-black/30 border border-grimoire-border rounded text-grimoire-text text-sm font-mono placeholder:text-grimoire-text-dim focus:outline-none focus:border-grimoire-purple focus:ring-1 focus:ring-grimoire-purple transition-all"
           />
           <button
@@ -569,6 +694,23 @@ function PotionEditor({
             <Plus size={14} />
           </button>
         </div>
+        {activeField === "header" && envSuggestions.length > 0 && (
+          <div className="mt-1 bg-grimoire-bg-secondary border border-grimoire-green/50 rounded shadow-xl max-h-32 overflow-y-auto">
+            {envSuggestions.map((envKey) => (
+              <button
+                key={envKey}
+                className="w-full px-3 py-2 flex items-center gap-2 text-sm hover:bg-grimoire-green/10 transition-colors text-left"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleEnvSelect(envKey)}
+              >
+                <Key size={12} className="text-grimoire-green" />
+                <code className="text-grimoire-green font-grimoire text-xs">
+                  ${"{env." + envKey + "}"}
+                </code>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Body (POST only) */}
@@ -577,12 +719,34 @@ function PotionEditor({
           <label className="text-grimoire-text font-fantasy text-sm">
             Body (JSON)
           </label>
+          <p className="text-grimoire-text-dim text-xs">
+            Use <code className="px-1 py-0.5 bg-black/30 rounded text-grimoire-green font-grimoire">${"{env.KEY}"}</code> to inject API keys
+          </p>
           <textarea
+            ref={bodyRef}
             value={potion.body || ""}
-            onChange={(e) => setPotion({ ...potion, body: e.target.value })}
+            onChange={(e) => handleBodyChange(e.target.value, e)}
+            onBlur={closeAutocomplete}
             placeholder='{"key": "value"}'
             className="w-full px-3 py-2 bg-black/30 border border-grimoire-border rounded text-grimoire-text text-sm font-mono placeholder:text-grimoire-text-dim focus:outline-none focus:border-grimoire-purple focus:ring-1 focus:ring-grimoire-purple transition-all resize-y min-h-[100px]"
           />
+          {activeField === "body" && envSuggestions.length > 0 && (
+            <div className="mt-1 bg-grimoire-bg-secondary border border-grimoire-green/50 rounded shadow-xl max-h-32 overflow-y-auto">
+              {envSuggestions.map((envKey) => (
+                <button
+                  key={envKey}
+                  className="w-full px-3 py-2 flex items-center gap-2 text-sm hover:bg-grimoire-green/10 transition-colors text-left"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleEnvSelect(envKey)}
+                >
+                  <Key size={12} className="text-grimoire-green" />
+                  <code className="text-grimoire-green font-grimoire text-xs">
+                    ${"{env." + envKey + "}"}
+                  </code>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -19,6 +19,7 @@ interface GrimoireHeaderProps {
   filter: "all" | "execs" | "templates";
   onFilterChange: (filter: "all" | "execs" | "templates") => void;
   onCreateTemplate: () => void;
+  onCreateSpell: () => void;
   onOpenSettings: () => void;
   isSettingsOpen: boolean;
   onOpenBook: () => void;
@@ -35,6 +36,7 @@ export function GrimoireHeader({
   filter,
   onFilterChange,
   onCreateTemplate,
+  onCreateSpell,
   onOpenSettings,
   isSettingsOpen,
   onOpenBook,
@@ -106,13 +108,20 @@ export function GrimoireHeader({
           </button>
         </div>
 
-        {/* Create Button */}
+        {/* Create Buttons */}
         <button
           onClick={onCreateTemplate}
           className="flex items-center gap-2 px-4 py-2 bg-gradient-to-b from-grimoire-gold/80 to-grimoire-gold/60 border border-grimoire-gold text-grimoire-bg font-fantasy text-sm font-semibold rounded transition-all hover:from-grimoire-gold-bright/80 hover:to-grimoire-gold-bright/60 hover:shadow-[0_0_20px_rgba(201,162,39,0.4)] active:scale-95"
         >
           <Plus size={16} />
           <span>Inscribe Scroll</span>
+        </button>
+        <button
+          onClick={onCreateSpell}
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-b from-grimoire-accent/80 to-grimoire-accent/60 border border-grimoire-accent-bright text-white font-fantasy text-sm font-semibold rounded transition-all hover:from-grimoire-accent-bright/80 hover:to-grimoire-accent-bright/60 hover:shadow-[0_0_20px_rgba(106,150,215,0.4)] active:scale-95"
+        >
+          <Zap size={16} />
+          <span>Forge AI Spell</span>
         </button>
 
         {/* Book Button */}

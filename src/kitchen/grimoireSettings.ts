@@ -187,20 +187,42 @@ export const removePotion = (id: string): void => {
 };
 
 /**
+ * Replace ${env.VAR} placeholders in a string with values from apiKeys
+ */
+const replaceEnvPlaceholders = (text: string, apiKeys: GrimoireSettings["apiKeys"]): string => {
+  return text.replace(/\$\{env\.([a-zA-Z_][a-zA-Z0-9_]*)\}/g, (match, key) => {
+    const value = apiKeys[key as keyof typeof apiKeys];
+    return value !== undefined ? value : match;
+  });
+};
+
+/**
  * Execute a potion (fetch its value from the API)
  */
 export const executePotion = async (potion: AlchemyPotion): Promise<string> => {
   try {
+    const settings = loadSettings();
+    
+    // Replace ${env.VAR} in headers
+    const processedHeaders: Record<string, string> = {};
+    for (const [key, value] of Object.entries(potion.headers)) {
+      processedHeaders[key] = replaceEnvPlaceholders(value, settings.apiKeys);
+    }
+    
+    // Replace ${env.VAR} in URL and body
+    const processedUrl = replaceEnvPlaceholders(potion.url, settings.apiKeys);
+    const processedBody = potion.body ? replaceEnvPlaceholders(potion.body, settings.apiKeys) : undefined;
+
     const fetchOptions: RequestInit = {
       method: potion.method,
-      headers: potion.headers,
+      headers: processedHeaders,
     };
 
-    if (potion.method === "POST" && potion.body) {
-      fetchOptions.body = potion.body;
+    if (potion.method === "POST" && processedBody) {
+      fetchOptions.body = processedBody;
     }
 
-    const response = await fetch(potion.url, fetchOptions);
+    const response = await fetch(processedUrl, fetchOptions);
     const text = await response.text();
 
     // Update last value and timestamp

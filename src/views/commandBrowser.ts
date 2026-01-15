@@ -8,6 +8,13 @@ import {
   updateCustomTemplate,
   CustomTemplate,
 } from "../kitchen/customTemplates";
+import {
+  getCustomSpells,
+  addCustomSpell,
+  removeCustomSpell,
+  updateCustomSpell,
+  CustomSpell,
+} from "../kitchen/customSpells";
 import { templateRecipes } from "../kitchen/recipes/templateCommands";
 import { extractPlaceholders, replacePlaceholders } from "../kitchen/helpers";
 import { cmdKitchen } from "../kitchen/cmdKitchen";
@@ -32,7 +39,7 @@ interface CommandInfo {
   fullKey: string;
   category: string;
   subcategory?: string;
-  type: "exec" | "template" | "custom-template";
+  type: "exec" | "template" | "custom-template" | "custom-spell";
   args: string[];
   messageRecipe?: string[];
   isCustom?: boolean;
@@ -49,6 +56,7 @@ export const getCommandsData = (): {
   execs: Record<string, CategoryGroup>;
   templates: Record<string, CategoryGroup>;
   customTemplates: CustomTemplate[];
+  customSpells: CustomSpell[];
 } => {
   const execCategories: Record<string, CategoryGroup> = {};
   const templateCategories: Record<string, CategoryGroup> = {};
@@ -115,6 +123,7 @@ export const getCommandsData = (): {
     execs: execCategories,
     templates: templateCategories,
     customTemplates: getCustomTemplates(),
+    customSpells: getCustomSpells(),
   };
 };
 
@@ -229,6 +238,37 @@ const setupCommandBrowserIPC = () => {
     (event, { id, updates }: { id: string; updates: Partial<CustomTemplate> }) => {
       const updated = updateCustomTemplate(id, updates);
       event.reply("grimoire-template-updated", updated);
+      if (browserWindow && !browserWindow.isDestroyed()) {
+        browserWindow.webContents.send("grimoire-commands-data", getCommandsData());
+      }
+    }
+  );
+
+  // Custom Spell handlers
+  ipcMain.on(
+    "grimoire-add-spell",
+    (event, spell: Omit<CustomSpell, "id" | "createdAt">) => {
+      const newSpell = addCustomSpell(spell);
+      event.reply("grimoire-spell-added", newSpell);
+      if (browserWindow && !browserWindow.isDestroyed()) {
+        browserWindow.webContents.send("grimoire-commands-data", getCommandsData());
+      }
+    }
+  );
+
+  ipcMain.on("grimoire-remove-spell", (event, id: string) => {
+    const success = removeCustomSpell(id);
+    event.reply("grimoire-spell-removed", { id, success });
+    if (browserWindow && !browserWindow.isDestroyed()) {
+      browserWindow.webContents.send("grimoire-commands-data", getCommandsData());
+    }
+  });
+
+  ipcMain.on(
+    "grimoire-update-spell",
+    (event, { id, updates }: { id: string; updates: Partial<CustomSpell> }) => {
+      const updated = updateCustomSpell(id, updates);
+      event.reply("grimoire-spell-updated", updated);
       if (browserWindow && !browserWindow.isDestroyed()) {
         browserWindow.webContents.send("grimoire-commands-data", getCommandsData());
       }
@@ -381,6 +421,9 @@ const cleanupCommandBrowserIPC = () => {
   ipcMain.removeAllListeners("grimoire-add-template");
   ipcMain.removeAllListeners("grimoire-remove-template");
   ipcMain.removeAllListeners("grimoire-update-template");
+  ipcMain.removeAllListeners("grimoire-add-spell");
+  ipcMain.removeAllListeners("grimoire-remove-spell");
+  ipcMain.removeAllListeners("grimoire-update-spell");
   ipcMain.removeAllListeners("grimoire-close");
   ipcMain.removeAllListeners("grimoire-minimize");
   ipcMain.removeAllListeners("grimoire-execute-template");
