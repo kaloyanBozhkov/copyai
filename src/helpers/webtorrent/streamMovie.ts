@@ -1,4 +1,4 @@
-import { exec } from "child_process";
+import { exec, spawn, ChildProcess } from "child_process";
 import path from "path";
 import http from "http";
 import { v4 as uuidv4 } from "uuid";
@@ -17,8 +17,6 @@ import {
   getSubtitlesFromDirectory,
 } from "../subs/convertSrt";
 import { SupportedLanguage } from "../subs/opensubtitles";
-import { setAllLightsState } from "../wiz";
-import { openTVBrowser } from "../lg";
 
 export interface StreamProcess {
   id: string;
@@ -89,9 +87,37 @@ let activeServer: {
   client: any;
   cleanup: () => void;
   processId: string;
+  caffeinateProcess?: ChildProcess;
 } | null = null;
 
+// Start caffeinate to prevent sleep during streaming (macOS)
+const startCaffeinate = (): ChildProcess | undefined => {
+  if (process.platform !== "darwin") return undefined;
+  try {
+    // -d: prevent display sleep, -i: prevent idle sleep
+    const proc = spawn("caffeinate", ["-d", "-i"], {
+      stdio: "ignore",
+      detached: false,
+    });
+    console.log("Caffeinate started - preventing sleep during stream");
+    return proc;
+  } catch (e) {
+    console.warn("Could not start caffeinate:", e);
+    return undefined;
+  }
+};
+
+const stopCaffeinate = (proc?: ChildProcess) => {
+  if (proc && !proc.killed) {
+    proc.kill();
+    console.log("Caffeinate stopped - sleep prevention disabled");
+  }
+};
+
 const buildVideoPlayerHTML = (videoUrl: string, videoName: string): string => {
+  // Create a storage key from video name (sanitized)
+  const storageKey = `video_progress_${videoName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -152,11 +178,86 @@ const buildVideoPlayerHTML = (videoUrl: string, videoName: string): string => {
     .video-title-overlay.hidden {
       opacity: 0;
     }
+    .resume-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 20000;
+    }
+    .resume-modal.hidden {
+      display: none;
+    }
+    .resume-dialog {
+      background: #1a1a2e;
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+      max-width: 400px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+    .resume-dialog h2 {
+      color: #fff;
+      margin: 0 0 12px 0;
+      font-size: 22px;
+    }
+    .resume-dialog p {
+      color: #aaa;
+      margin: 0 0 24px 0;
+      font-size: 16px;
+    }
+    .resume-dialog .time {
+      color: #4ecdc4;
+      font-weight: bold;
+    }
+    .resume-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+    .resume-btn {
+      padding: 12px 28px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.2s;
+    }
+    .resume-btn:hover {
+      transform: scale(1.02);
+    }
+    .resume-btn:active {
+      transform: scale(0.98);
+    }
+    .resume-btn.primary {
+      background: #4ecdc4;
+      color: #000;
+      font-weight: 600;
+    }
+    .resume-btn.secondary {
+      background: #333;
+      color: #fff;
+    }
   </style>
 </head>
 <body>
   <div class="error-log" id="error-log"></div>
   <div class="video-title-overlay" id="video-title">${videoName}</div>
+  <div class="resume-modal hidden" id="resume-modal">
+    <div class="resume-dialog">
+      <h2>Resume Playback?</h2>
+      <p>You were watching at <span class="time" id="resume-time">0:00</span></p>
+      <div class="resume-buttons">
+        <button class="resume-btn secondary" id="start-over-btn">Start Over</button>
+        <button class="resume-btn primary" id="resume-btn">Resume</button>
+      </div>
+    </div>
+  </div>
   <div class="video-container">
     <video
       id="video-player"
@@ -175,11 +276,51 @@ const buildVideoPlayerHTML = (videoUrl: string, videoName: string): string => {
   </div>
   <script src="https://vjs.zencdn.net/8.6.1/video.min.js"></script>
   <script>
+    const STORAGE_KEY = '${storageKey}';
     const errorLog = document.getElementById('error-log');
+    
     function showError(msg) {
       errorLog.textContent = msg;
       errorLog.style.display = 'block';
       console.error(msg);
+    }
+    
+    function formatTime(seconds) {
+      const hrs = Math.floor(seconds / 3600);
+      const mins = Math.floor((seconds % 3600) / 60);
+      const secs = Math.floor(seconds % 60);
+      if (hrs > 0) {
+        return hrs + ':' + String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+      }
+      return mins + ':' + String(secs).padStart(2, '0');
+    }
+    
+    function saveProgress(time) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ time: time, updated: Date.now() }));
+      } catch (e) {
+        console.log('Could not save progress');
+      }
+    }
+    
+    function getSavedProgress() {
+      try {
+        const data = localStorage.getItem(STORAGE_KEY);
+        if (data) {
+          const parsed = JSON.parse(data);
+          // Only return if saved within last 30 days
+          if (Date.now() - parsed.updated < 30 * 24 * 60 * 60 * 1000) {
+            return parsed.time;
+          }
+        }
+      } catch (e) {}
+      return null;
+    }
+    
+    function clearProgress() {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) {}
     }
     
     const player = videojs('video-player', {
@@ -198,6 +339,9 @@ const buildVideoPlayerHTML = (videoUrl: string, videoName: string): string => {
       }
     });
     
+    let hasShownResumePrompt = false;
+    let pendingResumeTime = null;
+    
     player.ready(function() {
       console.log('Video.js player ready');
     });
@@ -215,6 +359,19 @@ const buildVideoPlayerHTML = (videoUrl: string, videoName: string): string => {
     
     player.on('loadedmetadata', function() {
       console.log('Metadata loaded');
+      
+      // Check for saved progress and show resume prompt
+      if (!hasShownResumePrompt) {
+        hasShownResumePrompt = true;
+        const savedTime = getSavedProgress();
+        if (savedTime && savedTime > 10) { // Only prompt if more than 10 seconds in
+          pendingResumeTime = savedTime;
+          const resumeModal = document.getElementById('resume-modal');
+          const resumeTimeEl = document.getElementById('resume-time');
+          resumeTimeEl.textContent = formatTime(savedTime);
+          resumeModal.classList.remove('hidden');
+        }
+      }
     });
     
     player.on('loadeddata', function() {
@@ -231,6 +388,41 @@ const buildVideoPlayerHTML = (videoUrl: string, videoName: string): string => {
     
     player.on('stalled', function() {
       showError('Video stalled - buffering');
+    });
+    
+    // Save progress periodically
+    player.on('timeupdate', function() {
+      const currentTime = player.currentTime();
+      const duration = player.duration();
+      // Save every 5 seconds, but not if near the end (within 30 seconds)
+      if (currentTime > 5 && duration - currentTime > 30) {
+        saveProgress(currentTime);
+      }
+    });
+    
+    // Clear progress when video ends
+    player.on('ended', function() {
+      clearProgress();
+    });
+    
+    // Resume modal handlers
+    document.getElementById('resume-btn').addEventListener('click', function() {
+      document.getElementById('resume-modal').classList.add('hidden');
+      if (pendingResumeTime) {
+        player.currentTime(pendingResumeTime);
+      }
+      player.play().catch(function(err) {
+        showError('Play failed: ' + err.message);
+      });
+    });
+    
+    document.getElementById('start-over-btn').addEventListener('click', function() {
+      document.getElementById('resume-modal').classList.add('hidden');
+      clearProgress();
+      player.currentTime(0);
+      player.play().catch(function(err) {
+        showError('Play failed: ' + err.message);
+      });
     });
     
     // Track loaded subtitles to avoid duplicates
@@ -290,11 +482,13 @@ const buildVideoPlayerHTML = (videoUrl: string, videoName: string): string => {
     player.on('play', showVideoTitle);
     player.on('pause', showVideoTitle);
     
-    // Try to play after a short delay
+    // Only auto-play if no resume prompt
     setTimeout(function() {
-      player.play().catch(function(err) {
-        showError('Play failed: ' + err.message);
-      });
+      if (!pendingResumeTime) {
+        player.play().catch(function(err) {
+          showError('Play failed: ' + err.message);
+        });
+      }
     }, 500);
   </script>
 </body>
@@ -307,12 +501,14 @@ export const streamMovie = async ({
   searchQuery,
   subsLanguage = "eng",
   isAnime = false,
+  onStreamReady,
 }: {
   magnetLinkUrl: string;
   downloadPath: string;
   searchQuery: string;
   subsLanguage?: SupportedLanguage;
   isAnime?: boolean;
+  onStreamReady?: (streamUrl: string) => void;
 }) => {
   // Kill previous stream if exists
   if (activeServer) {
@@ -766,17 +962,15 @@ export const streamMovie = async ({
 
           server.listen(port, "0.0.0.0", () => {
             const streamUrl = `http://localhost:${port}`;
+            const networkUrl = `http://koko-mac.com:${port}`;
             console.log(`Movie streaming at: ${streamUrl}`);
             console.log(`Movie: ${movieFile.name}`);
-            console.log(`Access from TV: http://koko-mac.com:${port}`);
+            console.log(`Access from network: ${networkUrl}`);
 
-            // Open in default video player
-            openTVBrowser(`http://koko-mac.com:${port}`);
-
-            // Turn off lights for cinema mode
-            setAllLightsState(false).then(() => {
-              console.log("Lights turned off for movie");
-            });
+            // Notify caller that stream is ready
+            if (onStreamReady) {
+              onStreamReady(networkUrl);
+            }
           });
 
           // Check if movie file download is complete
@@ -813,10 +1007,14 @@ export const streamMovie = async ({
             }
           });
 
+          // Start caffeinate to prevent sleep
+          const caffeinateProcess = startCaffeinate();
+
           // Cleanup function
           const cleanup = () => {
             console.log("Shutting down stream server...");
             try {
+              stopCaffeinate(caffeinateProcess);
               if (idleCheckInterval) clearInterval(idleCheckInterval);
               if (progressInterval) clearInterval(progressInterval);
               if (server && server.listening) {
@@ -834,7 +1032,7 @@ export const streamMovie = async ({
           };
 
           // Store active server for future cleanup
-          activeServer = { server, client, cleanup, processId };
+          activeServer = { server, client, cleanup, processId, caffeinateProcess };
 
           // Cleanup on process exit
           process.on("exit", cleanup);

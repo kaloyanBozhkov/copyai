@@ -74,6 +74,166 @@ import {
 } from "../../helpers/subs/opensubtitles";
 import { playSpotify } from "../../helpers/spotify";
 
+// Helper to find and stream a movie torrent
+const streamMovieTorrent = async (
+  args: string[] | undefined,
+  onStreamReady?: (url: string) => void
+): Promise<string | null> => {
+  if (!args || !args[0]) return null;
+  const text = args.join(" ");
+  const subsLanguage = (text.split(" -")[1] ?? "eng").trim();
+  if (!isSupportedLanguage(subsLanguage)) {
+    return `Invalid subtitle language: ${subsLanguage}`;
+  }
+  const title = text.split(" -")[0].trim();
+  if (!title) return "no movie title provided";
+
+  const { searchText } = parseSearchQuery(title);
+  console.log("searching torrent for ", searchText);
+  const link = await getPiratebaySearchLink(searchText);
+  const {
+    elementsHTML: selectedItemsElementsHTML,
+    text: selectedItemsHTML,
+  } = await getPageHTMLWithJS({
+    url: link,
+    selector: "ol li",
+    limit: 20,
+    skip: 1,
+    returnOuterHTML: true,
+  });
+
+  if (selectedItemsHTML.length === 0) {
+    return null;
+  }
+
+  const { index } = await retry(
+    async () => {
+      return getLLMResponse({
+        systemMessage: await getMovieSystemMessage(selectedItemsHTML),
+        userMessage: title,
+        schema: z.object({
+          index: z.number(),
+        }),
+      });
+    },
+    3,
+    false
+  );
+
+  const selectedItem = selectedItemsElementsHTML[index];
+  if (!selectedItem) return null;
+  if (selectedItem.indexOf("00000000000000") !== -1) return null;
+
+  const magnetLink = parse(selectedItem).querySelector('a[href^="magnet:?"]');
+  if (!magnetLink) return null;
+  const magnetLinkUrl = magnetLink.getAttribute("href");
+  if (!magnetLinkUrl) return null;
+
+  const downloadPath = path.join(os.homedir(), "Downloads", "movies");
+
+  await streamMovie({
+    magnetLinkUrl,
+    downloadPath,
+    searchQuery: title,
+    subsLanguage,
+    onStreamReady,
+  });
+
+  return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
+};
+
+// Helper to find and stream an anime torrent
+const streamAnimeTorrent = async (
+  args: string[] | undefined,
+  onStreamReady?: (url: string) => void
+): Promise<string | null> => {
+  if (!args || !args[0]) return null;
+  const text = args.join(" ");
+  const subsLanguage = (text.split(" -")[1] ?? "eng").trim();
+  if (!isSupportedLanguage(subsLanguage)) {
+    return `Invalid subtitle language: ${subsLanguage}`;
+  }
+  const title = text.split(" -")[0].trim();
+  if (!title) return "no anime title provided";
+  const { searchText, season, episode } = parseSearchQuery(title, true);
+
+  const searchPages = async (
+    withSeasonEpisode: boolean
+  ): Promise<string | null> => {
+    let page = 1;
+    while (true) {
+      const link = await getAnimeSearchLink({
+        search: searchText,
+        page,
+        ...(withSeasonEpisode && {
+          season: season ?? undefined,
+          episode: episode ?? undefined,
+        }),
+      });
+
+      const {
+        elementsHTML: selectedItemsElementsHTML,
+        text: selectedItemsHTML,
+      } = await getPageHTMLWithJS({
+        url: link,
+        selector: "tbody tr",
+        limit: 50,
+        skip: 1,
+        returnOuterHTML: true,
+      });
+
+      if (selectedItemsHTML.length === 0) return null;
+
+      const { index } = await retry(
+        async () => {
+          return getLLMResponse({
+            systemMessage: await getAnimeSystemMessage(selectedItemsHTML),
+            userMessage: title,
+            schema: z.object({
+              index: z.number(),
+            }),
+          });
+        },
+        3,
+        false
+      );
+
+      const selectedItem = selectedItemsElementsHTML[index];
+      if (selectedItem) {
+        const magnetLink = parse(selectedItem).querySelector(
+          'a[href^="magnet:?"]'
+        );
+        const url = magnetLink?.getAttribute("href");
+        if (url) return url;
+      }
+
+      page++;
+    }
+  };
+
+  let magnetLinkUrl: string | null = null;
+  if (season || episode) {
+    magnetLinkUrl = await searchPages(true);
+  }
+  if (!magnetLinkUrl) {
+    magnetLinkUrl = await searchPages(false);
+  }
+  if (!magnetLinkUrl) return null;
+
+  const downloadPath = path.join(os.homedir(), "Downloads", "movies");
+
+  await streamMovie({
+    magnetLinkUrl,
+    downloadPath,
+    searchQuery: title,
+    subsLanguage,
+    isAnime: true,
+    onStreamReady,
+  });
+
+  return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
+};
+
 // Helper to create room-specific commands
 const createRoomCommands = (
   roomName: string
@@ -426,76 +586,7 @@ export const execsPerCategory: Record<
   },
   movie: {
     stream: [
-      async (args?: string[]) => {
-        if (!args || !args[0]) return null;
-        const text = args.join(" ");
-        const subsLanguage = (text.split(" -")[1] ?? "eng").trim();
-        if (!isSupportedLanguage(subsLanguage)) {
-          return `Invalid subtitle language: ${subsLanguage}`;
-        }
-        const title = text.split(" -")[0].trim();
-        if (!title) return "no movie title provided";
-
-        const { searchText } = parseSearchQuery(title);
-        console.log("searching torrent for ", searchText);
-        const link = await getPiratebaySearchLink(searchText);
-        const {
-          elementsHTML: selectedItemsElementsHTML,
-          text: selectedItemsHTML,
-        } = await getPageHTMLWithJS({
-          url: link,
-          selector: "ol li",
-          limit: 20,
-          skip: 1,
-          returnOuterHTML: true,
-        });
-
-        if (selectedItemsHTML.length === 0) {
-          return null;
-        }
-
-        const { index } = await retry(
-          async () => {
-            return getLLMResponse({
-              systemMessage: await getMovieSystemMessage(selectedItemsHTML),
-              userMessage: title,
-              schema: z.object({
-                index: z.number(),
-              }),
-            });
-          },
-          3,
-          false
-        );
-
-        const selectedItem = selectedItemsElementsHTML[index];
-        if (!selectedItem) {
-          return null;
-        }
-
-        if (selectedItem.indexOf("00000000000000") !== -1) {
-          return null;
-        }
-
-        const magnetLink = parse(selectedItem).querySelector(
-          'a[href^="magnet:?"]'
-        );
-        if (!magnetLink) return null;
-        const magnetLinkUrl = magnetLink.getAttribute("href");
-        if (!magnetLinkUrl) return null;
-
-        // stream the torrent (non-blocking)
-        const downloadPath = path.join(os.homedir(), "Downloads", "movies");
-
-        await streamMovie({
-          magnetLinkUrl,
-          downloadPath,
-          searchQuery: title,
-          subsLanguage,
-        });
-
-        return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
-      },
+      async (args?: string[]) => streamMovieTorrent(args),
       "title: string, subs-language?: -eng | -bul | -ita",
     ],
     download: [
@@ -591,106 +682,7 @@ export const execsPerCategory: Record<
   },
   anime: {
     stream: [
-      async (args?: string[]) => {
-        if (!args || !args[0]) return null;
-        const text = args.join(" ");
-        const subsLanguage = (text.split(" -")[1] ?? "eng").trim();
-        if (!isSupportedLanguage(subsLanguage)) {
-          return `Invalid subtitle language: ${subsLanguage}`;
-        }
-        const title = text.split(" -")[0].trim();
-        if (!title) return "no movie title provided";
-        const { searchText, season, episode } = parseSearchQuery(title, true);
-        console.log("searchText, season, episode", searchText, season, episode);
-
-        // Helper to search pages
-        const searchPages = async (
-          withSeasonEpisode: boolean
-        ): Promise<string | null> => {
-          let page = 1;
-          while (true) {
-            const link = await getAnimeSearchLink({
-              search: searchText,
-              page,
-              ...(withSeasonEpisode && {
-                season: season ?? undefined,
-                episode: episode ?? undefined,
-              }),
-            });
-            console.log(
-              `searching anime torrent page ${page}${withSeasonEpisode ? " (with S/E)" : ""}: ${link}`
-            );
-
-            const {
-              elementsHTML: selectedItemsElementsHTML,
-              text: selectedItemsHTML,
-            } = await getPageHTMLWithJS({
-              url: link,
-              selector: "tbody tr",
-              limit: 50,
-              skip: 1,
-              returnOuterHTML: true,
-            });
-
-            if (selectedItemsHTML.length === 0) {
-              return null;
-            }
-
-            const { index } = await retry(
-              async () => {
-                return getLLMResponse({
-                  systemMessage: await getAnimeSystemMessage(selectedItemsHTML),
-                  userMessage: title,
-                  schema: z.object({
-                    index: z.number(),
-                  }),
-                });
-              },
-              3,
-              false
-            );
-
-            const selectedItem = selectedItemsElementsHTML[index];
-            if (selectedItem) {
-              const magnetLink = parse(selectedItem).querySelector(
-                'a[href^="magnet:?"]'
-              );
-              const url = magnetLink?.getAttribute("href");
-              if (url) return url;
-            }
-
-            console.log(`No valid selection on page ${page}, trying next...`);
-            page++;
-          }
-        };
-
-        // First try with season/episode if present
-        let magnetLinkUrl: string | null = null;
-        if (season || episode) {
-          magnetLinkUrl = await searchPages(true);
-        }
-
-        // Fallback to search without season/episode
-        if (!magnetLinkUrl) {
-          console.log("Falling back to search without season/episode...");
-          magnetLinkUrl = await searchPages(false);
-        }
-
-        if (!magnetLinkUrl) return null;
-
-        // stream the torrent (non-blocking)
-        const downloadPath = path.join(os.homedir(), "Downloads", "movies");
-
-        await streamMovie({
-          magnetLinkUrl,
-          downloadPath,
-          searchQuery: title,
-          subsLanguage,
-          isAnime: true,
-        });
-
-        return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
-      },
+      async (args?: string[]) => streamAnimeTorrent(args),
       "title: string, subsLanguage?: -eng | -bul | -ita",
     ],
     download: [
@@ -788,6 +780,36 @@ export const execsPerCategory: Record<
   },
   transfer: {
     server: [async () => startTransferServer()],
+  },
+  tv: {
+    movie_stream: [
+      async (args?: string[]) =>
+        streamMovieTorrent(args, (url) => {
+          openTVBrowser(url);
+          setAllLightsState(false).then(() => console.log("Lights off for movie"));
+        }),
+      "title: string, subs-language?: -eng | -bul | -ita",
+    ],
+    anime_stream: [
+      async (args?: string[]) =>
+        streamAnimeTorrent(args, (url) => {
+          openTVBrowser(url);
+          setAllLightsState(false).then(() => console.log("Lights off for anime"));
+        }),
+      "title: string, subsLanguage?: -eng | -bul | -ita",
+    ],
+  },
+  laptop: {
+    movie_stream: [
+      async (args?: string[]) =>
+        streamMovieTorrent(args, (url) => exec(`open "${url}"`)),
+      "title: string, subs-language?: -eng | -bul | -ita",
+    ],
+    anime_stream: [
+      async (args?: string[]) =>
+        streamAnimeTorrent(args, (url) => exec(`open "${url}"`)),
+      "title: string, subsLanguage?: -eng | -bul | -ita",
+    ],
   },
   spotify: {
     play: [

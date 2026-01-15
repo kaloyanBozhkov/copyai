@@ -1,5 +1,16 @@
 import { useState, useMemo, useEffect } from "react";
-import { X, Beaker, Plus, Trash2, Search, Info, Play, Edit2, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  X,
+  Beaker,
+  Plus,
+  Trash2,
+  Search,
+  Info,
+  Play,
+  Edit2,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import { ipcRenderer } from "@/utils/electron";
 import type { AlchemyPotion } from "./types";
 
@@ -8,14 +19,23 @@ interface AlchemyModalProps {
   onClose: () => void;
 }
 
-export function AlchemyModal({ potions: initialPotions, onClose }: AlchemyModalProps) {
+export function AlchemyModal({
+  potions: initialPotions,
+  onClose,
+}: AlchemyModalProps) {
   const [potions, setPotions] = useState<AlchemyPotion[]>(initialPotions);
   const [searchQuery, setSearchQuery] = useState("");
-  const [editingPotion, setEditingPotion] = useState<AlchemyPotion | null>(null);
+  const [editingPotion, setEditingPotion] = useState<AlchemyPotion | null>(
+    null
+  );
   const [isCreating, setIsCreating] = useState(false);
   const [testingPotionId, setTestingPotionId] = useState<string | null>(null);
-  const [expandedPotionIds, setExpandedPotionIds] = useState<Set<string>>(new Set());
-  const [deletingPotion, setDeletingPotion] = useState<AlchemyPotion | null>(null);
+  const [expandedPotionIds, setExpandedPotionIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [deletingPotion, setDeletingPotion] = useState<AlchemyPotion | null>(
+    null
+  );
 
   const filteredPotions = useMemo(() => {
     if (!searchQuery) return potions;
@@ -58,10 +78,13 @@ export function AlchemyModal({ potions: initialPotions, onClose }: AlchemyModalP
 
     ipcRenderer.on("grimoire-potion-result", handlePotionResult);
     ipcRenderer.on("grimoire-settings-data", handleSettingsUpdate);
-    
+
     return () => {
       ipcRenderer.removeListener("grimoire-potion-result", handlePotionResult);
-      ipcRenderer.removeListener("grimoire-settings-data", handleSettingsUpdate);
+      ipcRenderer.removeListener(
+        "grimoire-settings-data",
+        handleSettingsUpdate
+      );
     };
   }, []);
 
@@ -148,9 +171,13 @@ export function AlchemyModal({ potions: initialPotions, onClose }: AlchemyModalP
         {/* Info */}
         <div className="px-6 py-4 border-b border-grimoire-border/50 bg-gradient-to-br from-grimoire-purple/5 to-transparent">
           <div className="flex items-start gap-3">
-            <Info size={16} className="text-grimoire-purple-bright mt-0.5 flex-shrink-0" />
+            <Info
+              size={16}
+              className="text-grimoire-purple-bright mt-0.5 flex-shrink-0"
+            />
             <p className="text-grimoire-text-dim text-sm">
-              Create dynamic potions that fetch values from APIs. Reference them using{" "}
+              Create dynamic potions that fetch values from APIs. Reference them
+              using{" "}
               <code className="px-1.5 py-0.5 bg-black/30 rounded text-grimoire-purple-bright font-grimoire text-xs">
                 ${"{alchemy.potionname}"}
               </code>{" "}
@@ -189,7 +216,10 @@ export function AlchemyModal({ potions: initialPotions, onClose }: AlchemyModalP
             <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-4">
               {filteredPotions.length === 0 && potions.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Beaker size={48} className="text-grimoire-text-dim mb-4 opacity-50" />
+                  <Beaker
+                    size={48}
+                    className="text-grimoire-text-dim mb-4 opacity-50"
+                  />
                   <p className="text-grimoire-text-dim text-sm mb-1">
                     No potions brewed yet
                   </p>
@@ -199,7 +229,10 @@ export function AlchemyModal({ potions: initialPotions, onClose }: AlchemyModalP
                 </div>
               ) : filteredPotions.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Search size={48} className="text-grimoire-text-dim mb-4 opacity-50" />
+                  <Search
+                    size={48}
+                    className="text-grimoire-text-dim mb-4 opacity-50"
+                  />
                   <p className="text-grimoire-text-dim text-sm">
                     No potions match your search
                   </p>
@@ -244,7 +277,11 @@ export function AlchemyModal({ potions: initialPotions, onClose }: AlchemyModalP
                                 <span>Last value</span>
                                 {potion.lastFetched && (
                                   <span className="text-grimoire-text-dim/60 font-normal ml-1">
-                                    ({new Date(potion.lastFetched).toLocaleTimeString()})
+                                    (
+                                    {new Date(
+                                      potion.lastFetched
+                                    ).toLocaleTimeString()}
+                                    )
                                   </span>
                                 )}
                               </button>
@@ -308,8 +345,14 @@ export function AlchemyModal({ potions: initialPotions, onClose }: AlchemyModalP
 
       {/* Delete Confirmation Modal */}
       {deletingPotion && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-auto" onClick={handleCancelDelete}>
-          <div className="w-full max-w-md bg-gradient-to-br from-grimoire-bg-secondary to-grimoire-bg border-2 border-grimoire-red/50 rounded-lg shadow-2xl overflow-hidden pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-auto"
+          onClick={handleCancelDelete}
+        >
+          <div
+            className="w-full max-w-md bg-gradient-to-br from-grimoire-bg-secondary to-grimoire-bg border-2 border-grimoire-red/50 rounded-lg shadow-2xl overflow-hidden pointer-events-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="px-6 py-4 border-b border-grimoire-red/30 bg-gradient-to-r from-grimoire-red/20 to-transparent">
               <h3 className="font-fantasy text-grimoire-red font-bold text-lg flex items-center gap-2">
                 <Trash2 size={20} />
@@ -325,7 +368,8 @@ export function AlchemyModal({ potions: initialPotions, onClose }: AlchemyModalP
                 ?
               </p>
               <p className="text-grimoire-text-dim text-sm">
-                This action cannot be undone. Any templates using this potion will fail to fetch this value.
+                This action cannot be undone. Any templates using this potion
+                will fail to fetch this value.
               </p>
             </div>
             <div className="px-6 py-4 border-t border-grimoire-border bg-black/20 flex justify-end gap-3">
@@ -357,7 +401,12 @@ interface PotionEditorProps {
   isCreating: boolean;
 }
 
-function PotionEditor({ potion: initialPotion, onSave, onCancel, isCreating }: PotionEditorProps) {
+function PotionEditor({
+  potion: initialPotion,
+  onSave,
+  onCancel,
+  isCreating,
+}: PotionEditorProps) {
   const [potion, setPotion] = useState(initialPotion);
   const [headerKey, setHeaderKey] = useState("");
   const [headerValue, setHeaderValue] = useState("");
@@ -387,7 +436,8 @@ function PotionEditor({ potion: initialPotion, onSave, onCancel, isCreating }: P
     }
   };
 
-  const canSave = potion.name.trim() && potion.url.trim() && isValidUrl(potion.url);
+  const canSave =
+    potion.name.trim() && potion.url.trim() && isValidUrl(potion.url);
   const urlError = potion.url.trim() && !isValidUrl(potion.url);
 
   return (
@@ -398,11 +448,15 @@ function PotionEditor({ potion: initialPotion, onSave, onCancel, isCreating }: P
 
       {/* Name */}
       <div className="space-y-2">
-        <label className="text-grimoire-text font-fantasy text-sm">Potion Name</label>
+        <label className="text-grimoire-text font-fantasy text-sm">
+          Potion Name
+        </label>
         <input
           type="text"
           value={potion.name}
-          onChange={(e) => setPotion({ ...potion, name: e.target.value.replace(/\s+/g, "_") })}
+          onChange={(e) =>
+            setPotion({ ...potion, name: e.target.value.replace(/\s+/g, "_") })
+          }
           placeholder="my_potion"
           className="w-full px-3 py-2 bg-black/30 border border-grimoire-border rounded text-grimoire-text text-sm font-grimoire placeholder:text-grimoire-text-dim focus:outline-none focus:border-grimoire-purple focus:ring-1 focus:ring-grimoire-purple transition-all"
         />
@@ -418,7 +472,9 @@ function PotionEditor({ potion: initialPotion, onSave, onCancel, isCreating }: P
 
       {/* Method */}
       <div className="space-y-2">
-        <label className="text-grimoire-text font-fantasy text-sm">Method</label>
+        <label className="text-grimoire-text font-fantasy text-sm">
+          Method
+        </label>
         <div className="flex gap-2">
           <button
             className={`px-4 py-2 rounded text-sm font-medium transition-all ${
@@ -426,7 +482,9 @@ function PotionEditor({ potion: initialPotion, onSave, onCancel, isCreating }: P
                 ? "bg-grimoire-accent/20 text-grimoire-accent-bright border border-grimoire-accent/50"
                 : "bg-black/20 text-grimoire-text-dim border border-grimoire-border hover:text-grimoire-text"
             }`}
-            onClick={() => setPotion({ ...potion, method: "GET", body: undefined })}
+            onClick={() =>
+              setPotion({ ...potion, method: "GET", body: undefined })
+            }
           >
             GET
           </button>
@@ -466,11 +524,16 @@ function PotionEditor({ potion: initialPotion, onSave, onCancel, isCreating }: P
 
       {/* Headers */}
       <div className="space-y-2">
-        <label className="text-grimoire-text font-fantasy text-sm">Headers</label>
+        <label className="text-grimoire-text font-fantasy text-sm">
+          Headers
+        </label>
         {Object.entries(potion.headers).length > 0 && (
           <div className="space-y-2 mb-2">
             {Object.entries(potion.headers).map(([key, value]) => (
-              <div key={key} className="flex items-center gap-2 p-2 bg-black/30 rounded">
+              <div
+                key={key}
+                className="flex items-center gap-2 p-2 bg-black/30 rounded"
+              >
                 <code className="flex-1 text-grimoire-text text-xs font-mono">
                   {key}: {value}
                 </code>
@@ -512,7 +575,9 @@ function PotionEditor({ potion: initialPotion, onSave, onCancel, isCreating }: P
       {/* Body (POST only) */}
       {potion.method === "POST" && (
         <div className="space-y-2">
-          <label className="text-grimoire-text font-fantasy text-sm">Body (JSON)</label>
+          <label className="text-grimoire-text font-fantasy text-sm">
+            Body (JSON)
+          </label>
           <textarea
             value={potion.body || ""}
             onChange={(e) => setPotion({ ...potion, body: e.target.value })}
@@ -539,10 +604,10 @@ function PotionEditor({ potion: initialPotion, onSave, onCancel, isCreating }: P
               ? !potion.name.trim()
                 ? "Potion name is required"
                 : !potion.url.trim()
-                ? "URL is required"
-                : urlError
-                ? "URL must be a valid http:// or https:// URL"
-                : ""
+                  ? "URL is required"
+                  : urlError
+                    ? "URL must be a valid http:// or https:// URL"
+                    : ""
               : ""
           }
         >
@@ -552,4 +617,3 @@ function PotionEditor({ potion: initialPotion, onSave, onCancel, isCreating }: P
     </div>
   );
 }
-
