@@ -345,9 +345,8 @@ export function CreateTemplateModal({
               </div>
             )}
 
-            {step === 3 && (
-              <div className="space-y-4">
-                <div className="flex items-start justify-between gap-4">
+              {step === 3 && (
+                <div className="space-y-4">
                   <div>
                     <h3 className="text-lg font-fantasy font-bold text-grimoire-text mb-1">
                       Write Your Incantation
@@ -360,18 +359,6 @@ export function CreateTemplateModal({
                       <code className="px-1 py-0.5 bg-black/30 rounded text-grimoire-accent-bright text-xs">${"{book.field}"}</code>.
                     </p>
                   </div>
-                  <button
-                    className="flex items-center gap-2 px-3 py-2 rounded bg-grimoire-accent/10 border border-grimoire-accent/50 text-grimoire-accent-bright hover:bg-grimoire-accent/20 text-sm whitespace-nowrap transition-all flex-shrink-0"
-                    onClick={() => {
-                      setAutocompleteLineIndex(lines.length - 1);
-                      setActiveInputRef(document.querySelector(`input[placeholder="Line ${lines.length}..."]`) as HTMLInputElement);
-                      setShowBookModal(true);
-                    }}
-                  >
-                    <Book size={14} />
-                    View Book
-                  </button>
-                </div>
 
                 <div className="space-y-2">
                   {lines.map((line, index) => (
@@ -395,7 +382,7 @@ export function CreateTemplateModal({
 
                       {/* Autocomplete dropdown */}
                       {autocompleteLineIndex === index && autocompleteSuggestions.length > 0 && (
-                        <div className="absolute top-full left-6 right-0 mt-1 z-10 bg-grimoire-bg-secondary border border-grimoire-gold/50 rounded shadow-xl max-h-32 overflow-y-auto">
+                        <div className="absolute top-full left-8 right-12 mt-1 z-10 bg-grimoire-bg-secondary border border-grimoire-gold/50 rounded shadow-xl max-h-32 overflow-y-auto">
                           {autocompleteSuggestions.map((field) => (
                             <button
                               key={field}
@@ -421,6 +408,18 @@ export function CreateTemplateModal({
                   >
                     <Plus size={14} />
                     Add Line
+                  </button>
+
+                  <button
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded bg-grimoire-accent/10 border border-grimoire-accent/50 text-grimoire-accent-bright hover:bg-grimoire-accent/20 text-sm transition-all"
+                    onClick={() => {
+                      setAutocompleteLineIndex(lines.length - 1);
+                      setActiveInputRef(document.querySelector(`input[placeholder="Line ${lines.length}..."]`) as HTMLInputElement);
+                      setShowBookModal(true);
+                    }}
+                  >
+                    <Book size={14} />
+                    Add From Book
                   </button>
                 </div>
 
