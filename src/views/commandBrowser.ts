@@ -10,6 +10,7 @@ import {
 } from "../kitchen/customTemplates";
 import { templateRecipes } from "../kitchen/recipes/templateCommands";
 import { extractPlaceholders, replacePlaceholders } from "../kitchen/helpers";
+import { cmdKitchen } from "../kitchen/cmdKitchen";
 import {
   getSettings,
   updateSettings,
@@ -278,6 +279,38 @@ const setupCommandBrowserIPC = () => {
     }
   );
 
+  // Execute a spell (exec command) from the grimoire
+  ipcMain.on(
+    "grimoire-execute-spell",
+    async (event, { commandKey, args }: { commandKey: string; args: string[] }) => {
+      try {
+        console.log(`Casting spell: ${commandKey} with args:`, args);
+        const result = await cmdKitchen(commandKey, args);
+        
+        if (result === false) {
+          event.reply("grimoire-spell-result", { 
+            success: false, 
+            error: "Spell failed to execute" 
+          });
+        } else {
+          // result is either a string (copied content) or true (no content)
+          const copiedContent = typeof result === "string" ? result : undefined;
+          event.reply("grimoire-spell-result", { 
+            success: true, 
+            message: `Spell "${commandKey}" cast successfully`,
+            copiedContent,
+          });
+        }
+      } catch (error) {
+        console.error("Spell execution error:", error);
+        event.reply("grimoire-spell-result", { 
+          success: false, 
+          error: String(error) 
+        });
+      }
+    }
+  );
+
   // Settings IPC handlers
   ipcMain.on("grimoire-get-settings", (event) => {
     event.reply("grimoire-settings-data", getSettings());
@@ -351,6 +384,7 @@ const cleanupCommandBrowserIPC = () => {
   ipcMain.removeAllListeners("grimoire-close");
   ipcMain.removeAllListeners("grimoire-minimize");
   ipcMain.removeAllListeners("grimoire-execute-template");
+  ipcMain.removeAllListeners("grimoire-execute-spell");
   ipcMain.removeAllListeners("grimoire-get-settings");
   ipcMain.removeAllListeners("grimoire-update-settings");
   ipcMain.removeAllListeners("grimoire-set-api-key");

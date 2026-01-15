@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Copy, Trash2, Zap, Scroll, BookOpen, Code, Tag, Play, Edit2 } from "lucide-react";
 import { ipcRenderer } from "@/utils/electron";
 import type { CommandInfo, CustomTemplate } from "./types";
+import { ActionButton } from "../atoms/ActionButton.atom";
 
 interface CommandDetailProps {
   command: CommandInfo | null;
@@ -18,6 +19,8 @@ export function CommandDetail({
 }: CommandDetailProps) {
   const [testArgs, setTestArgs] = useState<string[]>([]);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [spellResult, setSpellResult] = useState<{ success: boolean; message?: string; error?: string; copiedContent?: string } | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -25,6 +28,7 @@ export function CommandDetail({
   useEffect(() => {
     setTestArgs([]);
     setTestResult(null);
+    setSpellResult(null);
     setCopied(false);
   }, [command, customTemplate]);
 
@@ -36,6 +40,18 @@ export function CommandDetail({
     ipcRenderer.on("grimoire-template-result", handler);
     return () => {
       ipcRenderer.removeListener("grimoire-template-result", handler);
+    };
+  }, []);
+
+  // Listen for spell execution results
+  useEffect(() => {
+    const handler = (_: unknown, result: { success: boolean; message?: string; error?: string }) => {
+      setSpellResult(result);
+      setIsExecuting(false);
+    };
+    ipcRenderer.on("grimoire-spell-result", handler);
+    return () => {
+      ipcRenderer.removeListener("grimoire-spell-result", handler);
     };
   }, []);
 
@@ -51,6 +67,17 @@ export function CommandDetail({
     if (recipe) {
       ipcRenderer.send("grimoire-execute-template", {
         messageRecipe: recipe,
+        args: testArgs,
+      });
+    }
+  };
+
+  const handleCastSpell = () => {
+    if (command && command.type === "exec") {
+      setIsExecuting(true);
+      setSpellResult(null);
+      ipcRenderer.send("grimoire-execute-spell", {
+        commandKey: command.fullKey,
         args: testArgs,
       });
     }
@@ -259,13 +286,14 @@ export function CommandDetail({
               </div>
             )}
 
-            <button
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-b from-grimoire-accent to-grimoire-accent/80 border border-grimoire-accent-bright text-white font-fantasy text-sm font-semibold rounded transition-all hover:from-grimoire-accent-bright hover:to-grimoire-accent hover:shadow-[0_0_20px_rgba(106,150,215,0.4)] active:scale-95"
+            <ActionButton
+              variant="accent"
+              className="w-full text-sm"
               onClick={handleTestTemplate}
+              icon={<Play size={14} />}
             >
-              <Play size={14} />
               Cast Spell
-            </button>
+            </ActionButton>
 
             {testResult && (
               <div className="space-y-2 p-3 bg-black/40 border border-grimoire-gold/50 rounded">
@@ -289,14 +317,91 @@ export function CommandDetail({
           </div>
         )}
 
-        {/* Exec-only info */}
-        {!isTemplate && (
-          <div className="flex items-start gap-3 p-4 bg-grimoire-accent/10 border border-grimoire-accent/30 rounded">
-            <Zap size={14} className="text-grimoire-accent-bright mt-0.5 flex-shrink-0" />
-            <span className="text-grimoire-text-dim text-sm">
-              This spell executes code and may interact with external services. Use from the
-              command input to cast.
-            </span>
+        {/* Spell Execution UI for exec commands */}
+        {!isTemplate && command?.type === "exec" && (
+          <div className="space-y-3 p-4 bg-gradient-to-br from-grimoire-accent/10 to-transparent border border-grimoire-accent/30 rounded">
+            <div className="flex items-center gap-2 text-grimoire-accent-bright font-fantasy text-sm font-semibold">
+              <Zap size={14} />
+              <span>Cast Spell</span>
+            </div>
+
+            {args.length > 0 ? (
+              <div className="space-y-2">
+                {args.map((arg, i) => (
+                  <div key={i} className="space-y-1">
+                    <label className="text-xs text-grimoire-text-dim font-grimoire">
+                      {arg}
+                    </label>
+                    <input
+                      type="text"
+                      value={testArgs[i] || ""}
+                      onChange={(e) => {
+                        const newArgs = [...testArgs];
+                        newArgs[i] = e.target.value;
+                        setTestArgs(newArgs);
+                      }}
+                      placeholder="Enter value..."
+                      className="w-full px-3 py-2 bg-black/30 border border-grimoire-border rounded text-grimoire-text text-sm placeholder:text-grimoire-text-dim focus:outline-none focus:border-grimoire-accent-bright focus:ring-1 focus:ring-grimoire-accent-bright transition-all"
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-grimoire-text-dim text-sm italic">
+                No parameters required
+              </div>
+            )}
+
+            <ActionButton
+              variant="accent"
+              className="w-full text-sm"
+              onClick={handleCastSpell}
+              isLoading={isExecuting}
+              icon={<Zap size={14} />}
+            >
+              Cast Spell
+            </ActionButton>
+
+            {spellResult && (
+              <div className={`space-y-2 p-3 border rounded ${
+                spellResult.success 
+                  ? "bg-grimoire-green/10 border-grimoire-green/50" 
+                  : "bg-grimoire-red/10 border-grimoire-red/50"
+              }`}>
+                <span className={`text-xs font-fantasy font-semibold ${
+                  spellResult.success ? "text-grimoire-green" : "text-grimoire-red"
+                }`}>
+                  {spellResult.success ? "✓ Success" : "✗ Failed"}
+                </span>
+                <p className="text-grimoire-text text-xs">
+                  {spellResult.success ? spellResult.message : spellResult.error}
+                </p>
+                {spellResult.copiedContent && (
+                  <div className="mt-2 pt-2 border-t border-grimoire-green/30">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-grimoire-green font-fantasy">Copied to clipboard:</span>
+                      <button
+                        className="flex items-center gap-1 px-2 py-0.5 rounded text-xs text-grimoire-text-dim hover:text-grimoire-gold hover:bg-grimoire-gold/10 transition-all"
+                        onClick={() => navigator.clipboard.writeText(spellResult.copiedContent!)}
+                      >
+                        <Copy size={10} />
+                        Copy
+                      </button>
+                    </div>
+                    <pre className="text-grimoire-text text-xs font-grimoire bg-black/30 p-2 rounded max-h-40 overflow-auto whitespace-pre-wrap break-words">
+                      {spellResult.copiedContent}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-start gap-2 pt-2 border-t border-grimoire-border/50">
+              <Zap size={12} className="text-grimoire-text-dim mt-0.5 flex-shrink-0" />
+              <span className="text-grimoire-text-dim text-xs">
+                This spell executes code and may interact with external services.
+              </span>
+            </div>
           </div>
         )}
       </div>
@@ -331,18 +436,16 @@ export function CommandDetail({
               </p>
             </div>
             <div className="px-6 py-4 border-t border-grimoire-border bg-black/20 flex justify-end gap-3">
-              <button
-                className="px-4 py-2 rounded bg-black/30 border border-grimoire-border text-grimoire-text-dim hover:text-grimoire-text hover:bg-black/40 transition-all"
-                onClick={handleCancelDelete}
-              >
+              <ActionButton variant="ghost" onClick={handleCancelDelete}>
                 Cancel
-              </button>
-              <button
-                className="px-4 py-2 rounded bg-grimoire-red/80 border border-grimoire-red text-white font-fantasy font-semibold hover:bg-grimoire-red transition-all"
+              </ActionButton>
+              <ActionButton
+                variant="danger"
                 onClick={handleConfirmDelete}
+                icon={<Trash2 size={14} />}
               >
                 Delete Scroll
-              </button>
+              </ActionButton>
             </div>
           </div>
         </div>

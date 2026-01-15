@@ -3,6 +3,7 @@ import { X, Sparkles, Scroll, Wand2, Plus, Trash2, Eye, EyeOff, Book, Beaker } f
 import type { CustomTemplate, AlchemyPotion } from "./types";
 import { BookFieldsModal } from "./BookFieldsModal";
 import { AlchemyFieldsModal } from "./AlchemyFieldsModal";
+import { ActionButton } from "../atoms/ActionButton.atom";
 
 interface CreateTemplateModalProps {
   existingCategories: string[];
@@ -305,13 +306,13 @@ export function CreateTemplateModal({
                   className="w-full max-w-sm px-4 py-3 bg-black/30 border border-grimoire-border rounded text-grimoire-text text-center placeholder:text-grimoire-text-dim focus:outline-none focus:border-grimoire-gold-dim focus:ring-2 focus:ring-grimoire-gold-dim transition-all"
                   onKeyDown={(e) => e.key === "Enter" && canProceedStep1 && setStep(2)}
                 />
-                <button
-                  className="px-6 py-2 bg-grimoire-gold/20 border border-grimoire-gold text-grimoire-gold font-fantasy font-semibold rounded hover:bg-grimoire-gold/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                <ActionButton
+                  variant="gold-outline"
                   disabled={!canProceedStep1}
                   onClick={() => setStep(2)}
                 >
                   Continue
-                </button>
+                </ActionButton>
               </div>
             )}
 
@@ -376,19 +377,16 @@ export function CreateTemplateModal({
                 )}
 
                 <div className="flex gap-2 pt-4">
-                  <button
-                    className="px-6 py-2 bg-black/30 border border-grimoire-border text-grimoire-text-dim font-fantasy font-semibold rounded hover:text-grimoire-text hover:bg-black/40 transition-all"
-                    onClick={() => setStep(1)}
-                  >
+                  <ActionButton variant="ghost" onClick={() => setStep(1)}>
                     Back
-                  </button>
-                  <button
-                    className="px-6 py-2 bg-grimoire-gold/20 border border-grimoire-gold text-grimoire-gold font-fantasy font-semibold rounded hover:bg-grimoire-gold/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  </ActionButton>
+                  <ActionButton
+                    variant="gold-outline"
                     disabled={!canProceedStep2}
                     onClick={() => setStep(3)}
                   >
                     Continue
-                  </button>
+                  </ActionButton>
                 </div>
               </div>
             )}
@@ -603,20 +601,18 @@ export function CreateTemplateModal({
                 </div>
 
                 <div className="flex gap-2 pt-4 border-t border-grimoire-border">
-                  <button
-                    className="px-6 py-2 bg-black/30 border border-grimoire-border text-grimoire-text-dim font-fantasy font-semibold rounded hover:text-grimoire-text hover:bg-black/40 transition-all"
-                    onClick={() => setStep(2)}
-                  >
+                  <ActionButton variant="ghost" onClick={() => setStep(2)}>
                     Back
-                  </button>
-                  <button
-                    className="flex-1 flex items-center justify-center gap-2 px-6 py-2 bg-gradient-to-b from-grimoire-gold to-grimoire-gold/80 border border-grimoire-gold-bright text-grimoire-bg font-fantasy font-bold rounded hover:from-grimoire-gold-bright hover:to-grimoire-gold hover:shadow-[0_0_20px_rgba(201,162,39,0.4)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  </ActionButton>
+                  <ActionButton
+                    variant="primary"
+                    className="flex-1"
                     disabled={!canCreate}
                     onClick={handleSubmit}
+                    icon={<Sparkles size={14} />}
                   >
-                    <Sparkles size={14} />
                     {isEditMode ? "Update Scroll" : "Inscribe Scroll"}
-                  </button>
+                  </ActionButton>
                 </div>
               </div>
             )}

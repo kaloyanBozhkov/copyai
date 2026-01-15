@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { ipcRenderer } from "@/utils/electron";
 import type { AlchemyPotion } from "./types";
+import { ActionButton } from "../atoms/ActionButton.atom";
 
 interface AlchemyModalProps {
   potions: AlchemyPotion[];
@@ -203,13 +204,14 @@ export function AlchemyModal({
                   className="w-full pl-10 pr-4 py-2 bg-black/30 border border-grimoire-border rounded text-grimoire-text placeholder:text-grimoire-text-dim text-sm focus:outline-none focus:border-grimoire-purple focus:ring-1 focus:ring-grimoire-purple transition-all"
                 />
               </div>
-              <button
-                className="flex items-center gap-2 px-4 py-2 bg-grimoire-purple/20 border border-grimoire-purple/50 text-grimoire-purple-bright font-fantasy text-sm font-semibold rounded hover:bg-grimoire-purple/30 transition-all"
+              <ActionButton
+                variant="purple"
+                className="text-sm"
                 onClick={startCreating}
+                icon={<Plus size={14} />}
               >
-                <Plus size={14} />
                 New Potion
-              </button>
+              </ActionButton>
             </div>
 
             {/* Potions List */}
@@ -373,19 +375,16 @@ export function AlchemyModal({
               </p>
             </div>
             <div className="px-6 py-4 border-t border-grimoire-border bg-black/20 flex justify-end gap-3">
-              <button
-                className="px-4 py-2 rounded bg-black/30 border border-grimoire-border text-grimoire-text-dim hover:text-grimoire-text hover:bg-black/40 transition-all"
-                onClick={handleCancelDelete}
-              >
+              <ActionButton variant="ghost" onClick={handleCancelDelete}>
                 Cancel
-              </button>
-              <button
-                className="px-4 py-2 rounded bg-grimoire-red/80 border border-grimoire-red text-white font-fantasy font-semibold hover:bg-grimoire-red transition-all"
+              </ActionButton>
+              <ActionButton
+                variant="danger"
                 onClick={handleConfirmDelete}
+                icon={<Trash2 size={14} />}
               >
-                <Trash2 size={14} className="inline-block mr-2" />
                 Delete
-              </button>
+              </ActionButton>
             </div>
           </div>
         </div>
@@ -589,14 +588,12 @@ function PotionEditor({
 
       {/* Actions */}
       <div className="flex gap-3 pt-4 border-t border-grimoire-border">
-        <button
-          className="px-4 py-2 rounded bg-black/30 border border-grimoire-border text-grimoire-text-dim hover:text-grimoire-text hover:bg-black/40 transition-all"
-          onClick={onCancel}
-        >
+        <ActionButton variant="ghost" onClick={onCancel}>
           Cancel
-        </button>
-        <button
-          className="flex-1 px-4 py-2 rounded bg-grimoire-purple/20 border border-grimoire-purple/50 text-grimoire-purple-bright font-fantasy font-semibold hover:bg-grimoire-purple/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        </ActionButton>
+        <ActionButton
+          variant="purple"
+          className="flex-1"
           onClick={() => onSave(potion)}
           disabled={!canSave}
           title={
@@ -612,7 +609,7 @@ function PotionEditor({
           }
         >
           {isCreating ? "Brew Potion" : "Save Changes"}
-        </button>
+        </ActionButton>
       </div>
     </div>
   );

@@ -116,7 +116,8 @@ export const cmdKitchen = async (
   addToHistory(cmdAccessor);
   refreshCommandKeys();
   
-  return true;
+  // Return the message if it's a string, otherwise true
+  return typeof message === "string" ? message : true;
 };
 
 export const getArgs = (key: string) => {
