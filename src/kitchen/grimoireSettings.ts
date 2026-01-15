@@ -11,15 +11,15 @@ export interface AlchemyPotion {
   url: string;
   headers: Record<string, string>;
   body?: string;
+  contentType?: "none" | "application/json" | "application/x-www-form-urlencoded" | "text/plain";
+  responseType?: "text" | "json" | "json-path"; // json-path extracts a specific field
+  jsonPath?: string; // For json-path type, e.g., "data.result" or "choices[0].message.content"
   lastValue?: string;
   lastFetched?: number;
 }
 
 export interface GrimoireSettings {
-  apiKeys: {
-    OPENAI_API_KEY: string;
-    OPENROUTER_API_KEY: string;
-  };
+  apiKeys: Record<string, string>; // Dynamic API keys (e.g., OPENAI_API_KEY, OPENROUTER_API_KEY, custom keys)
   book: Record<string, string>; // Custom dictionary fields
   alchemy: AlchemyPotion[]; // Dynamic API-fetched values
 }
@@ -105,16 +105,19 @@ export const updateSettings = (
 };
 
 // API Key management
-export const getApiKey = (key: keyof GrimoireSettings["apiKeys"]): string => {
+export const getApiKey = (key: string): string => {
   return loadSettings().apiKeys[key] || "";
 };
 
-export const setApiKey = (
-  key: keyof GrimoireSettings["apiKeys"],
-  value: string
-): void => {
+export const setApiKey = (key: string, value: string): void => {
   const current = loadSettings();
   current.apiKeys[key] = value;
+  saveSettings(current);
+};
+
+export const removeApiKey = (key: string): void => {
+  const current = loadSettings();
+  delete current.apiKeys[key];
   saveSettings(current);
 };
 
@@ -189,11 +192,32 @@ export const removePotion = (id: string): void => {
 /**
  * Replace ${env.VAR} placeholders in a string with values from apiKeys
  */
-const replaceEnvPlaceholders = (text: string, apiKeys: GrimoireSettings["apiKeys"]): string => {
+const replaceEnvPlaceholders = (text: string, apiKeys: Record<string, string>): string => {
   return text.replace(/\$\{env\.([a-zA-Z_][a-zA-Z0-9_]*)\}/g, (match, key) => {
-    const value = apiKeys[key as keyof typeof apiKeys];
+    const value = apiKeys[key];
     return value !== undefined ? value : match;
   });
+};
+
+/**
+ * Extract a value from an object using a JSON path like "data.result" or "choices[0].message.content"
+ */
+const extractJsonPath = (obj: unknown, path: string): string => {
+  const parts = path.split(/\.|\[|\]/).filter(Boolean);
+  let current: unknown = obj;
+  
+  for (const part of parts) {
+    if (current === null || current === undefined) return "";
+    if (typeof current === "object" && current !== null) {
+      current = (current as Record<string, unknown>)[part];
+    } else {
+      return "";
+    }
+  }
+  
+  if (current === null || current === undefined) return "";
+  if (typeof current === "string") return current;
+  return JSON.stringify(current);
 };
 
 /**
@@ -207,6 +231,17 @@ export const executePotion = async (potion: AlchemyPotion): Promise<string> => {
     const processedHeaders: Record<string, string> = {};
     for (const [key, value] of Object.entries(potion.headers)) {
       processedHeaders[key] = replaceEnvPlaceholders(value, settings.apiKeys);
+    }
+    
+    // Add Content-Type header if specified
+    if (potion.contentType && potion.contentType !== "none") {
+      processedHeaders["Content-Type"] = potion.contentType;
+    }
+    
+    // Add Accept header for JSON response types
+    const responseType = potion.responseType || "text";
+    if (responseType === "json" || responseType === "json-path") {
+      processedHeaders["Accept"] = "application/json";
     }
     
     // Replace ${env.VAR} in URL and body
@@ -223,14 +258,26 @@ export const executePotion = async (potion: AlchemyPotion): Promise<string> => {
     }
 
     const response = await fetch(processedUrl, fetchOptions);
-    const text = await response.text();
+    
+    // Parse response based on responseType
+    let result: string;
+    
+    if (responseType === "json") {
+      const json = await response.json();
+      result = JSON.stringify(json);
+    } else if (responseType === "json-path" && potion.jsonPath) {
+      const json = await response.json();
+      result = extractJsonPath(json, potion.jsonPath);
+    } else {
+      result = await response.text();
+    }
 
     // Update last value and timestamp
-    potion.lastValue = text;
+    potion.lastValue = result;
     potion.lastFetched = Date.now();
     updatePotion(potion);
 
-    return text;
+    return result;
   } catch (error) {
     console.error(`Failed to execute potion ${potion.name}:`, error);
     throw error;

@@ -193,3 +193,20 @@ export const messageComposersPerCategory: Record<
 );
 
 export const messageComposers = flattenObjectDot(messageComposersPerCategory);
+
+// Descriptions for template commands
+export const templateDescriptions: Record<string, string> = {
+  // Comments
+  "comments.frame": "Create a framed comment block",
+  "comments.full_frame": "Create a full framed comment with top and bottom borders",
+  // Prompts
+  "prompts.tag": "Wrap content in XML-style tags",
+  "prompts.system_message": "System message template with about/instructions/examples sections",
+  "prompts.tool_recipe": "Tool documentation template with usage guidelines",
+  // Code
+  "code.service_procedures_recipe": "Template for building service procedures",
+  // Setup project
+  "setup_project.express_recipe": "Express.js backend project setup template",
+  // SSH
+  "ssh.linkbase": "SSH connection to Linkbase server",
+};

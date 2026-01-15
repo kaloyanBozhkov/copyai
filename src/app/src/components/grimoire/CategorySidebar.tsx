@@ -192,6 +192,39 @@ export function CategorySidebar({
     );
   }, [commandsData.customSpells, searchQuery]);
 
+  // Group custom templates by category
+  const templatesByCategory = useMemo(() => {
+    const grouped: Record<string, CustomTemplate[]> = {};
+    for (const template of filteredCustomTemplates) {
+      const cat = template.category || "uncategorized";
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(template);
+    }
+    return grouped;
+  }, [filteredCustomTemplates]);
+
+  // Group custom spells by category
+  const spellsByCategory = useMemo(() => {
+    const grouped: Record<string, CustomSpell[]> = {};
+    for (const spell of filteredCustomSpells) {
+      const cat = spell.category || "uncategorized";
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(spell);
+    }
+    return grouped;
+  }, [filteredCustomSpells]);
+
+  const [expandedTemplateCategories, setExpandedTemplateCategories] = useState<Record<string, boolean>>({});
+  const [expandedSpellCategories, setExpandedSpellCategories] = useState<Record<string, boolean>>({});
+
+  const toggleTemplateCategory = (cat: string) => {
+    setExpandedTemplateCategories((prev) => ({ ...prev, [cat]: !prev[cat] }));
+  };
+
+  const toggleSpellCategory = (cat: string) => {
+    setExpandedSpellCategories((prev) => ({ ...prev, [cat]: !prev[cat] }));
+  };
+
   return (
     <div className="w-80 border-r border-grimoire-border bg-gradient-to-br from-grimoire-bg-secondary/40 to-grimoire-bg/60 backdrop-blur-sm overflow-hidden flex flex-col">
       <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -229,19 +262,45 @@ export function CategorySidebar({
 
                 {customExpanded && (
                   <div className="bg-black/10">
-                    {filteredCustomTemplates.map((template) => (
-                      <button
-                        key={template.id}
-                        className={`w-full flex items-center gap-2 px-3 py-2 pl-9 text-left text-sm transition-all ${
-                          selectedCustomTemplate?.id === template.id
-                            ? "bg-grimoire-purple/20 text-grimoire-purple-bright border-l-2 border-grimoire-purple-bright"
-                            : "text-grimoire-text-dim hover:text-grimoire-text hover:bg-white/5 border-l-2 border-transparent"
-                        }`}
-                        onClick={() => onSelectCustomTemplate(template)}
-                      >
-                        <Scroll size={12} className="text-grimoire-purple-bright" />
-                        <span>{template.name}</span>
-                      </button>
+                    {Object.entries(templatesByCategory).map(([category, templates]) => (
+                      <div key={category}>
+                        <button
+                          className="w-full flex items-center gap-2 px-3 py-1.5 pl-6 text-left hover:bg-white/5 transition-colors"
+                          onClick={() => toggleTemplateCategory(category)}
+                        >
+                          <div className="text-grimoire-text-dim">
+                            {expandedTemplateCategories[category] !== false ? (
+                              <ChevronDown size={12} />
+                            ) : (
+                              <ChevronRight size={12} />
+                            )}
+                          </div>
+                          <span className="flex-1 text-grimoire-purple-bright/70 font-fantasy text-xs font-medium">
+                            {category}
+                          </span>
+                          <span className="text-xs text-grimoire-text-dim">
+                            {templates.length}
+                          </span>
+                        </button>
+                        {expandedTemplateCategories[category] !== false && (
+                          <div>
+                            {templates.map((template) => (
+                              <button
+                                key={template.id}
+                                className={`w-full flex items-center gap-2 px-3 py-2 pl-12 text-left text-sm transition-all ${
+                                  selectedCustomTemplate?.id === template.id
+                                    ? "bg-grimoire-purple/20 text-grimoire-purple-bright border-l-2 border-grimoire-purple-bright"
+                                    : "text-grimoire-text-dim hover:text-grimoire-text hover:bg-white/5 border-l-2 border-transparent"
+                                }`}
+                                onClick={() => onSelectCustomTemplate(template)}
+                              >
+                                <Scroll size={12} className="text-grimoire-purple-bright" />
+                                <span>{template.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}
@@ -272,19 +331,45 @@ export function CategorySidebar({
 
                 {customSpellsExpanded && (
                   <div className="bg-black/10">
-                    {filteredCustomSpells.map((spell) => (
-                      <button
-                        key={spell.id}
-                        className={`w-full flex items-center gap-2 px-3 py-2 pl-9 text-left text-sm transition-all ${
-                          selectedCustomSpell?.id === spell.id
-                            ? "bg-grimoire-accent/20 text-grimoire-accent-bright border-l-2 border-grimoire-accent-bright"
-                            : "text-grimoire-text-dim hover:text-grimoire-text hover:bg-white/5 border-l-2 border-transparent"
-                        }`}
-                        onClick={() => onSelectCustomSpell(spell)}
-                      >
-                        <Zap size={12} className="text-grimoire-accent-bright" />
-                        <span>{spell.name}</span>
-                      </button>
+                    {Object.entries(spellsByCategory).map(([category, spells]) => (
+                      <div key={category}>
+                        <button
+                          className="w-full flex items-center gap-2 px-3 py-1.5 pl-6 text-left hover:bg-white/5 transition-colors"
+                          onClick={() => toggleSpellCategory(category)}
+                        >
+                          <div className="text-grimoire-text-dim">
+                            {expandedSpellCategories[category] !== false ? (
+                              <ChevronDown size={12} />
+                            ) : (
+                              <ChevronRight size={12} />
+                            )}
+                          </div>
+                          <span className="flex-1 text-grimoire-accent-bright/70 font-fantasy text-xs font-medium">
+                            {category}
+                          </span>
+                          <span className="text-xs text-grimoire-text-dim">
+                            {spells.length}
+                          </span>
+                        </button>
+                        {expandedSpellCategories[category] !== false && (
+                          <div>
+                            {spells.map((spell) => (
+                              <button
+                                key={spell.id}
+                                className={`w-full flex items-center gap-2 px-3 py-2 pl-12 text-left text-sm transition-all ${
+                                  selectedCustomSpell?.id === spell.id
+                                    ? "bg-grimoire-accent/20 text-grimoire-accent-bright border-l-2 border-grimoire-accent-bright"
+                                    : "text-grimoire-text-dim hover:text-grimoire-text hover:bg-white/5 border-l-2 border-transparent"
+                                }`}
+                                onClick={() => onSelectCustomSpell(spell)}
+                              >
+                                <Zap size={12} className="text-grimoire-accent-bright" />
+                                <span>{spell.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}

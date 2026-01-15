@@ -1115,3 +1115,59 @@ const setupEmailComposeCommands = () => {
 setupEmailComposeCommands();
 
 export const execs = flattenObjectDot(execsPerCategory);
+
+// Descriptions for commands (key matches fullKey like "lights.off" or "ai.translate")
+export const execDescriptions: Record<string, string> = {
+  // Lights
+  "lights.off": "Turn off all lights",
+  "lights.on": "Turn on all lights",
+  "lights.to": "Set all lights brightness and/or color",
+  // TV
+  "tv.on": "Turn on the TV",
+  "tv.off": "Turn off the TV",
+  "tv.volume": "Set TV volume (0-100)",
+  "tv.setup": "Setup TV connection",
+  "tv.apps": "List available TV apps",
+  "tv.open": "Open an app on TV",
+  "tv.browse": "Open URL in TV browser",
+  "tv.youtube": "Open YouTube video on TV",
+  "tv.spotify": "Open Spotify on TV",
+  "tv.movie_stream": "Stream movie on TV",
+  "tv.anime_stream": "Stream anime on TV",
+  // Laptop streaming
+  "laptop.movie_stream": "Stream movie on laptop",
+  "laptop.anime_stream": "Stream anime on laptop",
+  // AC
+  "ac.on": "Turn on air conditioning",
+  "ac.off": "Turn off air conditioning",
+  "ac.temp": "Set AC temperature",
+  "ac.mode": "Set AC mode (cool/heat/fan/dry/auto)",
+  "ac.fan": "Set AC fan speed",
+  "ac.swing": "Set AC swing direction",
+  "ac.devices": "List AC devices",
+  "ac.auth": "Get Daikin auth URL",
+  "ac.authorize": "Authorize with Daikin code",
+  // AI
+  "ai.translate": "Translate text to target language",
+  "ai.code.command": "Generate terminal command from description",
+  "ai.code.javascript": "Generate JavaScript code",
+  "ai.code.typescript": "Generate TypeScript code",
+  "ai.summarize": "Summarize long text",
+  // Email
+  "email.reply": "Generate email reply",
+  "email.compose": "Compose professional email",
+  // Messaging
+  "slack.reply": "Generate Slack reply",
+  "linkedin.reply": "Generate LinkedIn reply",
+  // Job
+  "job.question": "Answer job application question",
+  "job.cover_letter": "Generate cover letter",
+  // Downloads
+  "download.movie": "Download movie torrent",
+  "download.anime": "Download anime torrent",
+  "download.subs": "Download subtitles for movie",
+  // Utils
+  "uuid.generate": "Generate random UUID",
+  "transfer.start": "Start file transfer server",
+  "spotify.play": "Play song on Spotify",
+};

@@ -27,6 +27,7 @@ export function CreateSpellModal({
   const isEditMode = !!existingSpell;
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [name, setName] = useState(existingSpell?.name || "");
+  const [description, setDescription] = useState(existingSpell?.description || "");
   const [category, setCategory] = useState(existingSpell?.category || "");
   const [isNewCategory, setIsNewCategory] = useState(false);
   const [systemMessage, setSystemMessage] = useState(existingSpell?.systemMessageTemplate || "");
@@ -176,6 +177,7 @@ export function CreateSpellModal({
     const spellData = {
       name: name.trim(),
       category: category.trim(),
+      description: description.trim() || undefined,
       systemMessageTemplate: systemMessage,
       retryCount,
     };
@@ -262,6 +264,13 @@ export function CreateSpellModal({
                   placeholder="my_awesome_spell"
                   className="w-full max-w-sm px-4 py-3 bg-black/30 border border-grimoire-border rounded text-grimoire-text text-center placeholder:text-grimoire-text-dim focus:outline-none focus:border-grimoire-accent focus:ring-2 focus:ring-grimoire-accent transition-all"
                   onKeyDown={(e) => e.key === "Enter" && canProceedStep1 && setStep(2)}
+                />
+                <input
+                  type="text"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Description (optional)"
+                  className="w-full max-w-sm px-4 py-2 bg-black/20 border border-grimoire-border/50 rounded text-grimoire-text-dim text-center text-sm placeholder:text-grimoire-text-dim/50 focus:outline-none focus:border-grimoire-accent/50 focus:ring-1 focus:ring-grimoire-accent/50 transition-all"
                 />
                 <ActionButton
                   variant="accent"

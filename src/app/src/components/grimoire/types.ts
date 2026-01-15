@@ -7,6 +7,7 @@ export interface CommandInfo {
   args: string[];
   messageRecipe?: string[];
   systemMessageTemplate?: string;
+  description?: string;
   isCustom?: boolean;
 }
 
@@ -20,6 +21,7 @@ export interface CustomTemplate {
   id: string;
   name: string;
   category: string;
+  description?: string;
   messageRecipe: string[];
   createdAt: number;
 }
@@ -28,6 +30,7 @@ export interface CustomSpell {
   id: string;
   name: string;
   category: string;
+  description?: string;
   systemMessageTemplate: string;
   retryCount: number;
   createdAt: number;
@@ -47,15 +50,15 @@ export interface AlchemyPotion {
   url: string;
   headers: Record<string, string>;
   body?: string;
+  contentType?: "none" | "application/json" | "application/x-www-form-urlencoded" | "text/plain";
+  responseType?: "text" | "json" | "json-path";
+  jsonPath?: string;
   lastValue?: string;
   lastFetched?: number;
 }
 
 export interface GrimoireSettings {
-  apiKeys: {
-    OPENAI_API_KEY: string;
-    OPENROUTER_API_KEY: string;
-  };
+  apiKeys: Record<string, string>;
   book: Record<string, string>;
   alchemy: AlchemyPotion[];
 }

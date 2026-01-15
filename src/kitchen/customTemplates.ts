@@ -14,6 +14,7 @@ export interface CustomTemplate {
   id: string;
   name: string;
   category: string;
+  description?: string;
   messageRecipe: string[];
   createdAt: number;
 }

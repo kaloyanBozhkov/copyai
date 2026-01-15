@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain } from "electron";
 import path from "path";
-import { execsPerCategory } from "../kitchen/recipes/execs";
+import { execsPerCategory, execDescriptions } from "../kitchen/recipes/execs";
 import {
   getCustomTemplates,
   addCustomTemplate,
@@ -15,13 +15,14 @@ import {
   updateCustomSpell,
   CustomSpell,
 } from "../kitchen/customSpells";
-import { templateRecipes } from "../kitchen/recipes/templateCommands";
+import { templateRecipes, templateDescriptions } from "../kitchen/recipes/templateCommands";
 import { extractPlaceholders, replacePlaceholders } from "../kitchen/helpers";
 import { cmdKitchen } from "../kitchen/cmdKitchen";
 import {
   getSettings,
   updateSettings,
   setApiKey,
+  removeApiKey,
   setBookField,
   removeBookField,
   getBook,
@@ -42,6 +43,7 @@ interface CommandInfo {
   type: "exec" | "template" | "custom-template" | "custom-spell";
   args: string[];
   messageRecipe?: string[];
+  description?: string;
   isCustom?: boolean;
 }
 
@@ -73,12 +75,14 @@ export const getCommandsData = (): {
       if (Array.isArray(value)) {
         // Direct command
         const [, ...argDefs] = value;
+        const fullKey = `${category}.${key}`;
         execCategories[category].commands.push({
           name: key,
-          fullKey: `${category}.${key}`,
+          fullKey,
           category,
           type: "exec",
           args: argDefs.flat().map(String),
+          description: execDescriptions[fullKey],
         });
       } else if (typeof value === "object" && value !== null) {
         // Subcategory
@@ -86,13 +90,15 @@ export const getCommandsData = (): {
         for (const [subKey, subValue] of Object.entries(value)) {
           if (Array.isArray(subValue)) {
             const [, ...argDefs] = subValue;
+            const fullKey = `${category}.${key}.${subKey}`;
             execCategories[category].subcategories![key].push({
               name: subKey,
-              fullKey: `${category}.${key}.${subKey}`,
+              fullKey,
               category,
               subcategory: key,
               type: "exec",
               args: argDefs.flat().map(String),
+              description: execDescriptions[fullKey],
             });
           }
         }
@@ -108,13 +114,15 @@ export const getCommandsData = (): {
     };
 
     for (const [key, recipe] of Object.entries(commands)) {
+      const fullKey = `${category}.${key}`;
       templateCategories[category].commands.push({
         name: key,
-        fullKey: `${category}.${key}`,
+        fullKey,
         category,
         type: "template",
         args: extractTemplateArgs(recipe),
         messageRecipe: recipe,
+        description: templateDescriptions[fullKey],
       });
     }
   }
@@ -366,11 +374,16 @@ const setupCommandBrowserIPC = () => {
 
   ipcMain.on(
     "grimoire-set-api-key",
-    (event, { key, value }: { key: "OPENAI_API_KEY" | "OPENROUTER_API_KEY"; value: string }) => {
+    (event, { key, value }: { key: string; value: string }) => {
       setApiKey(key, value);
       event.reply("grimoire-settings-data", getSettings());
     }
   );
+
+  ipcMain.on("grimoire-remove-api-key", (event, key: string) => {
+    removeApiKey(key);
+    event.reply("grimoire-settings-data", getSettings());
+  });
 
   ipcMain.on(
     "grimoire-set-book-field",
@@ -431,6 +444,7 @@ const cleanupCommandBrowserIPC = () => {
   ipcMain.removeAllListeners("grimoire-get-settings");
   ipcMain.removeAllListeners("grimoire-update-settings");
   ipcMain.removeAllListeners("grimoire-set-api-key");
+  ipcMain.removeAllListeners("grimoire-remove-api-key");
   ipcMain.removeAllListeners("grimoire-set-book-field");
   ipcMain.removeAllListeners("grimoire-remove-book-field");
   ipcMain.removeAllListeners("grimoire-add-potion");

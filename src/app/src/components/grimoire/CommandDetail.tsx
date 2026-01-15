@@ -147,6 +147,7 @@ export function CommandDetail({
   const title = command?.name || customTemplate?.name || customSpell?.name || "";
   const fullKey = command?.fullKey || (customTemplate ? `custom.${customTemplate.category}.${customTemplate.name}` : customSpell ? `spell.${customSpell.category}.${customSpell.name}` : "");
   const category = command?.category || customTemplate?.category || customSpell?.category || "";
+  const description = command?.description || customTemplate?.description || customSpell?.description;
   const args = command?.args ?? (customTemplate ? extractArgsFromRecipe(customTemplate.messageRecipe) : customSpell ? extractArgsFromSystemMessage(customSpell.systemMessageTemplate) : []);
   const recipe = command?.messageRecipe || customTemplate?.messageRecipe;
 
@@ -223,6 +224,13 @@ export function CommandDetail({
             {copied ? "Copied!" : "Copy"}
           </button>
         </div>
+
+        {/* Description */}
+        {description && (
+          <p className="text-grimoire-text-dim text-sm italic">
+            {description}
+          </p>
+        )}
       </div>
 
       {/* Body */}

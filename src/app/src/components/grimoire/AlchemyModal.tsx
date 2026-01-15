@@ -598,6 +598,80 @@ function PotionEditor({
         </div>
       </div>
 
+      {/* Content-Type (for POST) */}
+      {potion.method === "POST" && (
+        <div className="space-y-2">
+          <label className="text-grimoire-text font-fantasy text-sm">
+            Content-Type
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {(["none", "application/json", "application/x-www-form-urlencoded", "text/plain"] as const).map((ct) => (
+              <button
+                key={ct}
+                className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                  (potion.contentType || "none") === ct
+                    ? "bg-grimoire-purple/20 text-grimoire-purple-bright border border-grimoire-purple/50"
+                    : "bg-black/20 text-grimoire-text-dim border border-grimoire-border hover:text-grimoire-text"
+                }`}
+                onClick={() => setPotion({ ...potion, contentType: ct })}
+              >
+                {ct === "none" ? "None" : ct}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Response Type */}
+      <div className="space-y-2">
+        <label className="text-grimoire-text font-fantasy text-sm">
+          Response Parsing
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+              (potion.responseType || "text") === "text"
+                ? "bg-grimoire-accent/20 text-grimoire-accent-bright border border-grimoire-accent/50"
+                : "bg-black/20 text-grimoire-text-dim border border-grimoire-border hover:text-grimoire-text"
+            }`}
+            onClick={() => setPotion({ ...potion, responseType: "text", jsonPath: undefined })}
+          >
+            Raw Text / HTML
+          </button>
+          <button
+            className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+              potion.responseType === "json"
+                ? "bg-grimoire-gold/20 text-grimoire-gold border border-grimoire-gold/50"
+                : "bg-black/20 text-grimoire-text-dim border border-grimoire-border hover:text-grimoire-text"
+            }`}
+            onClick={() => setPotion({ ...potion, responseType: "json", jsonPath: undefined })}
+          >
+            Full JSON
+          </button>
+          <button
+            className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+              potion.responseType === "json-path"
+                ? "bg-grimoire-green/20 text-grimoire-green border border-grimoire-green/50"
+                : "bg-black/20 text-grimoire-text-dim border border-grimoire-border hover:text-grimoire-text"
+            }`}
+            onClick={() => setPotion({ ...potion, responseType: "json-path" })}
+          >
+            JSON Path
+          </button>
+        </div>
+        {potion.responseType === "json-path" && (
+          <div className="mt-2">
+            <input
+              type="text"
+              value={potion.jsonPath || ""}
+              onChange={(e) => setPotion({ ...potion, jsonPath: e.target.value })}
+              placeholder="e.g., data.result or choices[0].message.content"
+              className="w-full px-3 py-2 bg-black/30 border border-grimoire-border rounded text-grimoire-text text-sm font-mono placeholder:text-grimoire-text-dim focus:outline-none focus:border-grimoire-green focus:ring-1 focus:ring-grimoire-green transition-all"
+            />
+          </div>
+        )}
+      </div>
+
       {/* URL */}
       <div className="space-y-2">
         <label className="text-grimoire-text font-fantasy text-sm">URL</label>

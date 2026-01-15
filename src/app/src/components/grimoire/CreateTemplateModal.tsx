@@ -27,6 +27,7 @@ export function CreateTemplateModal({
   const isEditMode = !!existingTemplate;
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [name, setName] = useState(existingTemplate?.name || "");
+  const [description, setDescription] = useState(existingTemplate?.description || "");
   const [category, setCategory] = useState(existingTemplate?.category || "");
   const [isNewCategory, setIsNewCategory] = useState(false);
   const [lines, setLines] = useState<string[]>(existingTemplate?.messageRecipe || [""]);
@@ -220,6 +221,7 @@ export function CreateTemplateModal({
     const templateData = {
       name: name.trim(),
       category: category.trim(),
+      description: description.trim() || undefined,
       messageRecipe: lines.filter((l) => l.length > 0),
     };
 
@@ -305,6 +307,13 @@ export function CreateTemplateModal({
                   placeholder="my_awesome_scroll"
                   className="w-full max-w-sm px-4 py-3 bg-black/30 border border-grimoire-border rounded text-grimoire-text text-center placeholder:text-grimoire-text-dim focus:outline-none focus:border-grimoire-gold-dim focus:ring-2 focus:ring-grimoire-gold-dim transition-all"
                   onKeyDown={(e) => e.key === "Enter" && canProceedStep1 && setStep(2)}
+                />
+                <input
+                  type="text"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Description (optional)"
+                  className="w-full max-w-sm px-4 py-2 bg-black/20 border border-grimoire-border/50 rounded text-grimoire-text-dim text-center text-sm placeholder:text-grimoire-text-dim/50 focus:outline-none focus:border-grimoire-gold-dim/50 focus:ring-1 focus:ring-grimoire-gold-dim/50 transition-all"
                 />
                 <ActionButton
                   variant="gold-outline"

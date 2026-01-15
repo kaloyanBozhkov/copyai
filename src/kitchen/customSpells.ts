@@ -21,6 +21,7 @@ export interface CustomSpell {
   id: string;
   name: string;
   category: string;
+  description?: string;
   systemMessageTemplate: string;
   retryCount: number;
   createdAt: number;
@@ -215,8 +216,16 @@ export const getCustomSpellsAsExecutors = (): Record<
 
   for (const spell of spells) {
     const executor = spellToExecutor(spell);
+    
+    // Full key: spell.category.name
     const fullKey = `spell.${spell.category}.${spell.name}`;
     result[fullKey] = executor;
+    
+    // Medium key: category.name (without spell. prefix)
+    const mediumKey = `${spell.category}.${spell.name}`;
+    result[mediumKey] = executor;
+    
+    // Short key: just name
     result[spell.name] = executor;
   }
 
