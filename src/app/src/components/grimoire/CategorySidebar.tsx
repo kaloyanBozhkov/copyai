@@ -116,7 +116,7 @@ function CategoryItem({
           {Object.entries(filteredSubcategories).map(([subcat, commands]) => (
             <div key={subcat} className="border-l-2 border-grimoire-border/20 ml-4">
               <button
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-white/5 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-white/5 transition-colors"
                 onClick={() => toggleSubcat(subcat)}
               >
                 <div className="text-grimoire-text-dim">
@@ -126,8 +126,16 @@ function CategoryItem({
                     <ChevronRight size={12} />
                   )}
                 </div>
-                <span className="flex-1 text-grimoire-text-dim">{subcat}</span>
-                <span className="text-xs text-grimoire-text-dim">{commands.length}</span>
+                <TypeIcon
+                  size={12}
+                  className={type === "exec" ? "text-grimoire-accent/60" : "text-grimoire-gold/60"}
+                />
+                <span className={`flex-1 font-fantasy text-xs font-medium ${
+                  type === "exec" ? "text-grimoire-accent/80" : "text-grimoire-gold/80"
+                }`}>
+                  {subcat}
+                </span>
+                <span className="text-xs text-grimoire-text-dim bg-black/20 px-1.5 py-0.5 rounded">{commands.length}</span>
               </button>
 
               {expandedSubcats[subcat] && (
