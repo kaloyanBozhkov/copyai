@@ -73,63 +73,74 @@ function CategoryItem({
   const TypeIcon = type === "exec" ? Zap : Scroll;
 
   return (
-    <div className="grimoire-category">
+    <div className="border-b border-grimoire-border/30 last:border-b-0">
       <button
-        className="grimoire-category-header"
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/5 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <div className="grimoire-category-expand">
+        <div className="text-grimoire-text-dim">
           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </div>
-        <TypeIcon size={14} className={`grimoire-category-type ${type}`} />
-        <span className="grimoire-category-name">{category.name}</span>
-        <span className="grimoire-category-count">
+        <TypeIcon
+          size={14}
+          className={type === "exec" ? "text-grimoire-accent-bright" : "text-grimoire-gold"}
+        />
+        <span className="flex-1 text-grimoire-text font-fantasy text-sm font-medium">
+          {category.name}
+        </span>
+        <span className="text-xs text-grimoire-text-dim bg-black/30 px-2 py-0.5 rounded">
           {filteredCommands.length +
             Object.values(filteredSubcategories).reduce((a, b) => a + b.length, 0)}
         </span>
       </button>
 
       {isExpanded && (
-        <div className="grimoire-category-content">
+        <div className="bg-black/10">
           {filteredCommands.map((cmd) => (
             <button
               key={cmd.fullKey}
-              className={`grimoire-command-item ${
-                selectedCommand?.fullKey === cmd.fullKey ? "selected" : ""
+              className={`w-full flex items-center gap-2 px-3 py-2 pl-9 text-left text-sm transition-all ${
+                selectedCommand?.fullKey === cmd.fullKey
+                  ? "bg-grimoire-gold/20 text-grimoire-gold border-l-2 border-grimoire-gold"
+                  : "text-grimoire-text-dim hover:text-grimoire-text hover:bg-white/5 border-l-2 border-transparent"
               }`}
               onClick={() => onSelectCommand(cmd)}
             >
-              <Wand2 size={12} className="grimoire-command-icon" />
+              <Wand2 size={12} />
               <span>{cmd.name}</span>
             </button>
           ))}
 
           {Object.entries(filteredSubcategories).map(([subcat, commands]) => (
-            <div key={subcat} className="grimoire-subcategory">
+            <div key={subcat} className="border-l-2 border-grimoire-border/20 ml-4">
               <button
-                className="grimoire-subcategory-header"
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-white/5 transition-colors"
                 onClick={() => toggleSubcat(subcat)}
               >
-                {expandedSubcats[subcat] ? (
-                  <ChevronDown size={12} />
-                ) : (
-                  <ChevronRight size={12} />
-                )}
-                <span>{subcat}</span>
-                <span className="grimoire-subcategory-count">{commands.length}</span>
+                <div className="text-grimoire-text-dim">
+                  {expandedSubcats[subcat] ? (
+                    <ChevronDown size={12} />
+                  ) : (
+                    <ChevronRight size={12} />
+                  )}
+                </div>
+                <span className="flex-1 text-grimoire-text-dim">{subcat}</span>
+                <span className="text-xs text-grimoire-text-dim">{commands.length}</span>
               </button>
 
               {expandedSubcats[subcat] && (
-                <div className="grimoire-subcategory-content">
+                <div className="bg-black/10">
                   {commands.map((cmd) => (
                     <button
                       key={cmd.fullKey}
-                      className={`grimoire-command-item ${
-                        selectedCommand?.fullKey === cmd.fullKey ? "selected" : ""
+                      className={`w-full flex items-center gap-2 px-3 py-2 pl-12 text-left text-sm transition-all ${
+                        selectedCommand?.fullKey === cmd.fullKey
+                          ? "bg-grimoire-gold/20 text-grimoire-gold border-l-2 border-grimoire-gold"
+                          : "text-grimoire-text-dim hover:text-grimoire-text hover:bg-white/5 border-l-2 border-transparent"
                       }`}
                       onClick={() => onSelectCommand(cmd)}
                     >
-                      <Wand2 size={12} className="grimoire-command-icon" />
+                      <Wand2 size={12} />
                       <span>{cmd.name}</span>
                     </button>
                   ))}
@@ -167,45 +178,51 @@ export function CategorySidebar({
   }, [commandsData.customTemplates, searchQuery]);
 
   return (
-    <div className="grimoire-sidebar">
-      <div className="grimoire-sidebar-scroll">
+    <div className="w-80 border-r border-grimoire-border bg-gradient-to-br from-grimoire-bg-secondary/40 to-grimoire-bg/60 backdrop-blur-sm overflow-hidden flex flex-col">
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
         {/* Custom Templates Section */}
         {showTemplates && filteredCustomTemplates.length > 0 && (
-          <div className="grimoire-section">
-            <div className="grimoire-section-header custom">
-              <Sparkles size={14} />
-              <span>Your Inscriptions</span>
+          <div className="border-b border-grimoire-border">
+            <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-grimoire-gold/20 to-transparent border-b border-grimoire-gold/30">
+              <Sparkles size={14} className="text-grimoire-gold" />
+              <span className="font-fantasy text-sm font-semibold text-grimoire-gold">
+                Your Inscriptions
+              </span>
             </div>
 
-            <div className="grimoire-category custom-templates">
+            <div className="border-b border-grimoire-border/30">
               <button
-                className="grimoire-category-header custom"
+                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/5 transition-colors"
                 onClick={() => setCustomExpanded(!customExpanded)}
               >
-                <div className="grimoire-category-expand">
+                <div className="text-grimoire-text-dim">
                   {customExpanded ? (
                     <ChevronDown size={14} />
                   ) : (
                     <ChevronRight size={14} />
                   )}
                 </div>
-                <span className="grimoire-category-name">Custom Scrolls</span>
-                <span className="grimoire-category-count">
+                <span className="flex-1 text-grimoire-purple-bright font-fantasy text-sm font-medium">
+                  Custom Scrolls
+                </span>
+                <span className="text-xs text-grimoire-purple-bright bg-grimoire-purple/20 px-2 py-0.5 rounded">
                   {filteredCustomTemplates.length}
                 </span>
               </button>
 
               {customExpanded && (
-                <div className="grimoire-category-content">
+                <div className="bg-black/10">
                   {filteredCustomTemplates.map((template) => (
                     <button
                       key={template.id}
-                      className={`grimoire-command-item custom ${
-                        selectedCustomTemplate?.id === template.id ? "selected" : ""
+                      className={`w-full flex items-center gap-2 px-3 py-2 pl-9 text-left text-sm transition-all ${
+                        selectedCustomTemplate?.id === template.id
+                          ? "bg-grimoire-purple/20 text-grimoire-purple-bright border-l-2 border-grimoire-purple-bright"
+                          : "text-grimoire-text-dim hover:text-grimoire-text hover:bg-white/5 border-l-2 border-transparent"
                       }`}
                       onClick={() => onSelectCustomTemplate(template)}
                     >
-                      <Scroll size={12} className="grimoire-command-icon custom" />
+                      <Scroll size={12} className="text-grimoire-purple-bright" />
                       <span>{template.name}</span>
                     </button>
                   ))}
@@ -217,10 +234,12 @@ export function CategorySidebar({
 
         {/* Executable Commands Section */}
         {showExecs && (
-          <div className="grimoire-section">
-            <div className="grimoire-section-header execs">
-              <Zap size={14} />
-              <span>Spells (Executables)</span>
+          <div className="border-b border-grimoire-border">
+            <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-grimoire-accent/20 to-transparent border-b border-grimoire-accent/30">
+              <Zap size={14} className="text-grimoire-accent-bright" />
+              <span className="font-fantasy text-sm font-semibold text-grimoire-accent-bright">
+                Spells (Executables)
+              </span>
             </div>
             {Object.values(commandsData.execs).map((category) => (
               <CategoryItem
@@ -237,10 +256,12 @@ export function CategorySidebar({
 
         {/* Template Commands Section */}
         {showTemplates && (
-          <div className="grimoire-section">
-            <div className="grimoire-section-header templates">
-              <Scroll size={14} />
-              <span>Scrolls (Templates)</span>
+          <div>
+            <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-grimoire-gold/20 to-transparent border-b border-grimoire-gold/30">
+              <Scroll size={14} className="text-grimoire-gold" />
+              <span className="font-fantasy text-sm font-semibold text-grimoire-gold">
+                Scrolls (Templates)
+              </span>
             </div>
             {Object.values(commandsData.templates).map((category) => (
               <CategoryItem
@@ -258,4 +279,3 @@ export function CategorySidebar({
     </div>
   );
 }
-

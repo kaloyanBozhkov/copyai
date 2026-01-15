@@ -1,12 +1,105 @@
 @import "@koko420/react-components/styles.css";
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "./grimoire.css";
+
+/* WoW Quest Log Fonts - Local */
+@font-face {
+  font-family: 'Cinzel';
+  src: url('../assets/fonts/Cinzel-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Cinzel';
+  src: url('../assets/fonts/Cinzel-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Cinzel';
+  src: url('../assets/fonts/Cinzel-Black.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Crimson Text';
+  src: url('../assets/fonts/CrimsonText-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Crimson Text';
+  src: url('../assets/fonts/CrimsonText-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Crimson Text';
+  src: url('../assets/fonts/CrimsonText-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Crimson Text';
+  src: url('../assets/fonts/CrimsonText-SemiBoldItalic.ttf') format('truetype');
+  font-weight: 600;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Crimson Text';
+  src: url('../assets/fonts/CrimsonText-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Crimson Text';
+  src: url('../assets/fonts/CrimsonText-BoldItalic.ttf') format('truetype');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
 
 @theme {
   --shadow-layered: 0 0 2px rgba(0, 0, 0, 0.1), 0 0 4px rgba(0, 0, 0, 0.1), 1px 1px 2px rgba(0, 0, 0, 0.1), -1px -1px 2px rgba(0, 0, 0, 0.1);
   --text-shadow-layered: 0 0 2px rgba(0, 0, 0, 0.1), 0 0 4px rgba(0, 0, 0, 0.1), 1px 1px 2px rgba(0, 0, 0, 0.1), -1px -1px 2px rgba(0, 0, 0, 0.1);
   --drop-shadow-layered: drop-shadow(0 0 2px rgba(0,0,0,0.1)) drop-shadow(0 0 4px rgba(0,0,0,0.1)) drop-shadow(1px 1px 2px rgba(0,0,0,0.1)) drop-shadow(-1px -1px 2px rgba(0,0,0,0.1));
+  
+  /* WoW Grimoire Theme Colors */
+  --color-grimoire-bg: #0a0e14;
+  --color-grimoire-bg-secondary: #151922;
+  --color-grimoire-border: rgba(201, 162, 39, 0.3);
+  --color-grimoire-gold: #c9a227;
+  --color-grimoire-gold-dim: rgba(201, 162, 39, 0.5);
+  --color-grimoire-gold-bright: #f4d078;
+  --color-grimoire-text: #e8dfc8;
+  --color-grimoire-text-dim: rgba(232, 223, 200, 0.6);
+  --color-grimoire-accent: #4a6fa5;
+  --color-grimoire-accent-bright: #6a96d7;
+  --color-grimoire-purple: #7b4a9e;
+  --color-grimoire-purple-bright: #a066c9;
+  --color-grimoire-red: #d32f2f;
+  --color-grimoire-green: #4caf50;
+  
+  /* WoW Grimoire Fonts */
+  --font-family-fantasy: 'Cinzel', serif;
+  --font-family-grimoire: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  --font-family-serif: 'Crimson Text', Georgia, serif;
 }
 
 @utility shadow-layered {
@@ -19,6 +112,44 @@
 
 @utility drop-shadow-layered {
   filter: var(--drop-shadow-layered);
+}
+
+/* WoW Fantasy Font Utilities */
+@utility font-fantasy {
+  font-family: 'Cinzel', serif !important;
+}
+
+@utility font-grimoire {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace !important;
+}
+
+@utility font-serif-grimoire {
+  font-family: 'Crimson Text', Georgia, serif !important;
+}
+
+/* Custom scrollbar for grimoire */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-grimoire-gold-dim);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-grimoire-gold);
+}
+
+/* App drag region for Electron */
+.app-drag-region {
+  -webkit-app-region: drag;
 }
 
 :root {

@@ -19,6 +19,7 @@ export function CommandDetail({
   const [testArgs, setTestArgs] = useState<string[]>([]);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Reset state when selection changes
   useEffect(() => {
@@ -61,14 +62,33 @@ export function CommandDetail({
     }
   };
 
+  const handleDeleteClick = () => {
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (customTemplate) {
+      onDeleteCustomTemplate(customTemplate.id);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(false);
+  };
+
   // Empty state
   if (!command && !customTemplate) {
     return (
-      <div className="grimoire-detail">
-        <div className="grimoire-detail-empty">
-          <BookOpen size={48} className="grimoire-empty-icon" />
-          <h3>Select an Incantation</h3>
-          <p>Choose a spell or scroll from the grimoire to view its arcane details</p>
+      <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-grimoire-bg-secondary/20 to-grimoire-bg/40">
+        <div className="text-center space-y-4">
+          <BookOpen size={48} className="mx-auto text-grimoire-text-dim opacity-50" />
+          <h3 className="text-grimoire-text font-fantasy text-xl font-semibold">
+            Select an Incantation
+          </h3>
+          <p className="text-grimoire-text-dim text-sm max-w-sm">
+            Choose a spell or scroll from the grimoire to view its arcane details
+          </p>
         </div>
       </div>
     );
@@ -83,44 +103,68 @@ export function CommandDetail({
   const recipe = command?.messageRecipe || customTemplate?.messageRecipe;
 
   return (
-    <div className="grimoire-detail">
-      <div className="grimoire-detail-header">
-        <div className="grimoire-detail-type">
-          {isTemplate ? (
-            <Scroll className="grimoire-type-icon template" />
+    <div className="flex-1 flex flex-col bg-gradient-to-br from-grimoire-bg-secondary/20 to-grimoire-bg/40">
+      {/* Header */}
+      <div className="border-b border-grimoire-border bg-gradient-to-b from-grimoire-bg-secondary/40 to-transparent px-6 py-4 space-y-3">
+        {/* Type & Actions */}
+        <div className="flex items-center gap-3">
+          {isCustom ? (
+            <Scroll className="w-5 h-5 text-grimoire-purple-bright" />
+          ) : isTemplate ? (
+            <Scroll className="w-5 h-5 text-grimoire-gold" />
           ) : (
-            <Zap className="grimoire-type-icon exec" />
+            <Zap className="w-5 h-5 text-grimoire-accent-bright" />
           )}
-          <span className={`grimoire-type-label ${isTemplate ? "template" : "exec"}`}>
+          <span
+            className={`px-3 py-1 rounded text-xs font-fantasy font-semibold ${
+              isCustom
+                ? "bg-grimoire-purple/20 text-grimoire-purple-bright border border-grimoire-purple/50"
+                : isTemplate
+                ? "bg-grimoire-gold/20 text-grimoire-gold border border-grimoire-gold/50"
+                : "bg-grimoire-accent/20 text-grimoire-accent-bright border border-grimoire-accent/50"
+            }`}
+          >
             {isCustom ? "Custom Scroll" : isTemplate ? "Scroll" : "Spell"}
           </span>
           {isCustom && (
-            <>
+            <div className="flex gap-2 ml-auto">
               <button
-                className="grimoire-edit-btn"
+                className="p-2 rounded bg-grimoire-accent/20 border border-grimoire-accent/50 text-grimoire-accent-bright hover:bg-grimoire-accent/30 transition-all"
                 onClick={() => onEditCustomTemplate(customTemplate!)}
                 title="Edit this custom scroll"
               >
                 <Edit2 size={14} />
               </button>
               <button
-                className="grimoire-delete-btn"
-                onClick={() => onDeleteCustomTemplate(customTemplate!.id)}
+                className="p-2 rounded bg-grimoire-red/20 border border-grimoire-red/50 text-grimoire-red hover:bg-grimoire-red/30 transition-all"
+                onClick={handleDeleteClick}
                 title="Delete this custom scroll"
               >
                 <Trash2 size={14} />
               </button>
-            </>
+            </div>
           )}
         </div>
 
-        <h2 className="grimoire-detail-title">{title}</h2>
+        {/* Title */}
+        <h2 className={`text-2xl font-fantasy font-bold ${
+          isCustom ? "text-grimoire-purple-bright" : "text-grimoire-gold"
+        }`}>
+          {title}
+        </h2>
 
-        <div className="grimoire-detail-key">
-          <Code size={14} />
-          <code>{fullKey}</code>
+        {/* Key */}
+        <div className="flex items-center gap-2 bg-black/30 border border-grimoire-border rounded p-2">
+          <Code size={14} className="text-grimoire-text-dim" />
+          <code className="flex-1 text-grimoire-text text-sm font-grimoire">
+            {fullKey}
+          </code>
           <button
-            className={`grimoire-copy-btn ${copied ? "copied" : ""}`}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-all ${
+              copied
+                ? "bg-grimoire-green/20 text-grimoire-green border border-grimoire-green/50"
+                : "bg-grimoire-gold/20 text-grimoire-gold border border-grimoire-gold/50 hover:bg-grimoire-gold/30"
+            }`}
             onClick={handleCopyKey}
           >
             <Copy size={14} />
@@ -129,62 +173,72 @@ export function CommandDetail({
         </div>
       </div>
 
-      <div className="grimoire-detail-body">
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-4 space-y-6">
         {/* Category */}
-        <div className="grimoire-info-section">
-          <div className="grimoire-info-label">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-grimoire-gold font-fantasy text-sm font-semibold">
             <Tag size={14} />
             <span>Category</span>
           </div>
-          <div className="grimoire-info-value">
+          <div className="text-grimoire-text text-sm">
             {category}
-            {command?.subcategory && ` → ${command.subcategory}`}
+            {command?.subcategory && (
+              <span className="text-grimoire-text-dim"> → {command.subcategory}</span>
+            )}
           </div>
         </div>
 
-        {/* Arguments */}
-        <div className="grimoire-info-section">
-          <div className="grimoire-info-label">
+        {/* Parameters */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-grimoire-gold font-fantasy text-sm font-semibold">
             <BookOpen size={14} />
             <span>Parameters</span>
           </div>
           {args.length > 0 ? (
-            <div className="grimoire-args-list">
+            <div className="flex flex-wrap gap-2">
               {args.map((arg, i) => (
-                <div key={i} className="grimoire-arg-item">
-                  <code className="grimoire-arg-name">{arg}</code>
-                </div>
+                <code
+                  key={i}
+                  className="px-3 py-1.5 bg-grimoire-accent/20 border border-grimoire-accent/50 text-grimoire-accent-bright rounded text-xs font-grimoire"
+                >
+                  {arg}
+                </code>
               ))}
             </div>
           ) : (
-            <div className="grimoire-info-value muted">No parameters required</div>
+            <div className="text-grimoire-text-dim text-sm italic">No parameters required</div>
           )}
         </div>
 
         {/* Template Recipe Preview */}
         {recipe && (
-          <div className="grimoire-info-section">
-            <div className="grimoire-info-label">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-grimoire-gold font-fantasy text-sm font-semibold">
               <Scroll size={14} />
               <span>Scroll Contents</span>
             </div>
-            <pre className="grimoire-recipe-preview">{recipe.join("\n")}</pre>
+            <pre className="p-4 bg-black/40 border border-grimoire-border rounded text-grimoire-text text-xs font-grimoire overflow-x-auto whitespace-pre-wrap break-words">
+              {recipe.join("\n")}
+            </pre>
           </div>
         )}
 
         {/* Template Testing */}
         {(isTemplate || isCustom) && recipe && (
-          <div className="grimoire-test-section">
-            <div className="grimoire-info-label">
+          <div className="space-y-3 p-4 bg-gradient-to-br from-grimoire-accent/10 to-transparent border border-grimoire-accent/30 rounded">
+            <div className="flex items-center gap-2 text-grimoire-accent-bright font-fantasy text-sm font-semibold">
               <Play size={14} />
               <span>Test Incantation</span>
             </div>
 
             {args.length > 0 ? (
-              <div className="grimoire-test-inputs">
+              <div className="space-y-2">
                 {args.map((arg, i) => (
-                  <div key={i} className="grimoire-test-input">
-                    <label>{arg}</label>
+                  <div key={i} className="space-y-1">
+                    <label className="text-xs text-grimoire-text-dim font-grimoire">
+                      {arg}
+                    </label>
                     <input
                       type="text"
                       value={testArgs[i] || ""}
@@ -193,32 +247,43 @@ export function CommandDetail({
                         newArgs[i] = e.target.value;
                         setTestArgs(newArgs);
                       }}
-                      placeholder={`Enter value...`}
+                      placeholder="Enter value..."
+                      className="w-full px-3 py-2 bg-black/30 border border-grimoire-border rounded text-grimoire-text text-sm placeholder:text-grimoire-text-dim focus:outline-none focus:border-grimoire-accent-bright focus:ring-1 focus:ring-grimoire-accent-bright transition-all"
                     />
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="grimoire-info-value muted">
+              <div className="text-grimoire-text-dim text-sm italic">
                 No parameters - output will be static text
               </div>
             )}
 
-            <button className="grimoire-test-btn" onClick={handleTestTemplate}>
+            <button
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-b from-grimoire-accent to-grimoire-accent/80 border border-grimoire-accent-bright text-white font-fantasy text-sm font-semibold rounded transition-all hover:from-grimoire-accent-bright hover:to-grimoire-accent hover:shadow-[0_0_20px_rgba(106,150,215,0.4)] active:scale-95"
+              onClick={handleTestTemplate}
+            >
               <Play size={14} />
               Cast Spell
             </button>
 
             {testResult && (
-              <div className="grimoire-test-result">
-                <div className="grimoire-test-result-header">
-                  <span>Result</span>
-                  <button onClick={handleCopyResult}>
+              <div className="space-y-2 p-3 bg-black/40 border border-grimoire-gold/50 rounded">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-grimoire-gold font-fantasy font-semibold">
+                    Result
+                  </span>
+                  <button
+                    className="flex items-center gap-1 px-2 py-1 rounded text-xs text-grimoire-text-dim hover:text-grimoire-gold hover:bg-grimoire-gold/10 transition-all"
+                    onClick={handleCopyResult}
+                  >
                     <Copy size={12} />
                     Copy
                   </button>
                 </div>
-                <pre>{testResult}</pre>
+                <pre className="text-grimoire-text text-xs font-grimoire whitespace-pre-wrap break-words">
+                  {testResult}
+                </pre>
               </div>
             )}
           </div>
@@ -226,15 +291,62 @@ export function CommandDetail({
 
         {/* Exec-only info */}
         {!isTemplate && (
-          <div className="grimoire-exec-notice">
-            <Zap size={14} />
-            <span>
-              This spell executes code and may interact with external services.
-              Use from the command input to cast.
+          <div className="flex items-start gap-3 p-4 bg-grimoire-accent/10 border border-grimoire-accent/30 rounded">
+            <Zap size={14} className="text-grimoire-accent-bright mt-0.5 flex-shrink-0" />
+            <span className="text-grimoire-text-dim text-sm">
+              This spell executes code and may interact with external services. Use from the
+              command input to cast.
             </span>
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && customTemplate && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-auto"
+          onClick={handleCancelDelete}
+        >
+          <div
+            className="w-full max-w-md bg-gradient-to-br from-grimoire-bg-secondary to-grimoire-bg border-2 border-grimoire-red/50 rounded-lg shadow-2xl overflow-hidden pointer-events-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-grimoire-red/30 bg-gradient-to-r from-grimoire-red/20 to-transparent">
+              <h3 className="font-fantasy text-grimoire-red font-bold text-lg flex items-center gap-2">
+                <Trash2 size={20} />
+                Delete Custom Scroll
+              </h3>
+            </div>
+            <div className="px-6 py-6 space-y-4">
+              <p className="text-grimoire-text text-sm">
+                Are you sure you want to delete the scroll{" "}
+                <span className="font-fantasy font-semibold text-grimoire-purple-bright">
+                  "{customTemplate.name}"
+                </span>
+                ?
+              </p>
+              <p className="text-grimoire-text-dim text-sm">
+                This action cannot be undone. The scroll will be permanently removed from your
+                grimoire.
+              </p>
+            </div>
+            <div className="px-6 py-4 border-t border-grimoire-border bg-black/20 flex justify-end gap-3">
+              <button
+                className="px-4 py-2 rounded bg-black/30 border border-grimoire-border text-grimoire-text-dim hover:text-grimoire-text hover:bg-black/40 transition-all"
+                onClick={handleCancelDelete}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 rounded bg-grimoire-red/80 border border-grimoire-red text-white font-fantasy font-semibold hover:bg-grimoire-red transition-all"
+                onClick={handleConfirmDelete}
+              >
+                Delete Scroll
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -245,21 +357,21 @@ export function CommandDetail({
 function extractArgsFromRecipe(recipe: string[]): string[] {
   const text = recipe.join("\n");
   const all: string[] = [];
-  
+
   // Match $0, $1 etc (without braces)
   const numberedNoBraces = text.match(/\$(\d+)(?!\w)/g) || [];
   for (const m of numberedNoBraces) {
     const num = m.slice(1);
     if (!all.includes(num)) all.push(num);
   }
-  
+
   // Match ${0}, ${1} etc (with braces, numbered)
   const numberedWithBraces = text.match(/\$\{(\d+)\}/g) || [];
   for (const m of numberedWithBraces) {
     const num = m.slice(2, -1);
     if (!all.includes(num)) all.push(num);
   }
-  
+
   // Match ${named} placeholders
   const namedPlaceholders = text.match(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g) || [];
   for (const m of namedPlaceholders) {
@@ -268,8 +380,5 @@ function extractArgsFromRecipe(recipe: string[]): string[] {
   }
 
   // Return formatted arg definitions
-  return all.map((p) => 
-    /^\d+$/.test(p) ? `$${p}: string` : `${p}: string`
-  );
+  return all.map((p) => (/^\d+$/.test(p) ? `$${p}: string` : `${p}: string`));
 }
-

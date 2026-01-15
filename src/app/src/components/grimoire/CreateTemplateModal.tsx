@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Sparkles, Scroll, Wand2, Plus, Trash2, Eye, EyeOff, Book } from "lucide-react";
-import { ipcRenderer } from "@/utils/electron";
-import type { CustomTemplate, GrimoireSettings } from "./types";
+import type { CustomTemplate } from "./types";
 import { BookFieldsModal } from "./BookFieldsModal";
 
 interface CreateTemplateModalProps {
   existingCategories: string[];
-  existingTemplate?: CustomTemplate; // For edit mode
+  bookFields: Record<string, string>;
+  existingTemplate?: CustomTemplate;
   onClose: () => void;
   onCreate: (template: Omit<CustomTemplate, "id" | "createdAt">) => void;
   onUpdate?: (id: string, template: Omit<CustomTemplate, "id" | "createdAt">) => void;
@@ -14,6 +14,7 @@ interface CreateTemplateModalProps {
 
 export function CreateTemplateModal({
   existingCategories,
+  bookFields,
   existingTemplate,
   onClose,
   onCreate,
@@ -27,7 +28,6 @@ export function CreateTemplateModal({
   const [lines, setLines] = useState<string[]>(existingTemplate?.messageRecipe || [""]);
   const [previewArgs, setPreviewArgs] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
-  const [bookFields, setBookFields] = useState<Record<string, string>>({});
   const [showBookModal, setShowBookModal] = useState(false);
   const [autocompleteLineIndex, setAutocompleteLineIndex] = useState<number | null>(null);
   const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<string[]>([]);
@@ -37,57 +37,37 @@ export function CreateTemplateModal({
 
   useEffect(() => {
     nameInputRef.current?.focus();
-    
-    // Load book fields from settings
-    const handleSettingsData = (_: unknown, data: GrimoireSettings) => {
-      setBookFields(data.book);
-    };
-    
-    ipcRenderer.on("grimoire-settings-data", handleSettingsData);
-    ipcRenderer.send("grimoire-get-settings");
-    
-    return () => {
-      ipcRenderer.removeListener("grimoire-settings-data", handleSettingsData);
-    };
   }, []);
 
-  // Extract unique placeholders from all lines (supports $0, ${0}, ${named})
+  // Extract placeholders
   const extractedArgs = (() => {
     const text = lines.join("\n");
     const all: string[] = [];
-    
-    // Match $0, $1 etc (without braces)
+
     const numberedNoBraces = text.match(/\$(\d+)(?!\w)/g) || [];
     for (const m of numberedNoBraces) {
       const num = m.slice(1);
       if (!all.includes(num)) all.push(num);
     }
-    
-    // Match ${0}, ${1} etc (with braces, numbered)
+
     const numberedWithBraces = text.match(/\$\{(\d+)\}/g) || [];
     for (const m of numberedWithBraces) {
       const num = m.slice(2, -1);
       if (!all.includes(num)) all.push(num);
     }
-    
-    // Match ${named} placeholders
+
     const namedPlaceholders = text.match(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g) || [];
     for (const m of namedPlaceholders) {
       const name = m.slice(2, -1);
       if (!all.includes(name)) all.push(name);
     }
-    
+
     return all;
   })();
 
-  const handleAddLine = () => {
-    setLines([...lines, ""]);
-  };
-
+  const handleAddLine = () => setLines([...lines, ""]);
   const handleRemoveLine = (index: number) => {
-    if (lines.length > 1) {
-      setLines(lines.filter((_, i) => i !== index));
-    }
+    if (lines.length > 1) setLines(lines.filter((_, i) => i !== index));
   };
 
   const handleLineChange = (index: number, value: string, inputRef?: HTMLInputElement) => {
@@ -95,12 +75,11 @@ export function CreateTemplateModal({
     newLines[index] = value;
     setLines(newLines);
 
-    // Check for ${book. autocomplete
     if (inputRef) {
       const cursorPos = inputRef.selectionStart || 0;
       const textBeforeCursor = value.slice(0, cursorPos);
       const match = textBeforeCursor.match(/\$\{book\.(\w*)$/);
-      
+
       if (match) {
         const searchTerm = match[1].toLowerCase();
         const suggestions = Object.keys(bookFields).filter((field) =>
@@ -123,8 +102,7 @@ export function CreateTemplateModal({
     const cursorPos = activeInputRef.selectionStart || 0;
     const textBeforeCursor = currentLine.slice(0, cursorPos);
     const textAfterCursor = currentLine.slice(cursorPos);
-    
-    // Find the ${book. part and replace it
+
     const match = textBeforeCursor.match(/\$\{book\.(\w*)$/);
     if (match) {
       const beforeBook = textBeforeCursor.slice(0, match.index);
@@ -132,22 +110,20 @@ export function CreateTemplateModal({
       const newLines = [...lines];
       newLines[autocompleteLineIndex] = newLine;
       setLines(newLines);
-      
-      // Move cursor after the inserted field
+
       setTimeout(() => {
         const newCursorPos = beforeBook.length + `\${book.${field}}`.length;
         activeInputRef.setSelectionRange(newCursorPos, newCursorPos);
         activeInputRef.focus();
       }, 0);
     }
-    
+
     setAutocompleteSuggestions([]);
     setAutocompleteLineIndex(null);
   };
 
   const handleBookModalSelect = (field: string) => {
     if (activeInputRef && autocompleteLineIndex !== null) {
-      // Insert at cursor position
       const currentLine = lines[autocompleteLineIndex];
       const cursorPos = activeInputRef.selectionStart || 0;
       const before = currentLine.slice(0, cursorPos);
@@ -156,7 +132,7 @@ export function CreateTemplateModal({
       const newLines = [...lines];
       newLines[autocompleteLineIndex] = newLine;
       setLines(newLines);
-      
+
       setTimeout(() => {
         const newCursorPos = before.length + `\${book.${field}}`.length;
         activeInputRef.setSelectionRange(newCursorPos, newCursorPos);
@@ -167,23 +143,19 @@ export function CreateTemplateModal({
 
   const getPreview = () => {
     let result = lines.join("\n");
-    
-    // First, replace ${book.field} placeholders with actual values
+
     for (const [field, value] of Object.entries(bookFields)) {
       result = result.split(`\${book.${field}}`).join(value);
     }
-    
-    // Then replace user arguments (numbered and named)
+
     extractedArgs.forEach((arg, i) => {
       const isNumbered = /^\d+$/.test(arg);
       const replacement = previewArgs[i] || `[${isNumbered ? `$${arg}` : arg}]`;
-      
+
       if (isNumbered) {
-        // Replace both $N and ${N} formats
         result = result.split(`$${arg}`).join(replacement);
         result = result.split(`\${${arg}}`).join(replacement);
       } else {
-        // Replace ${named} format
         result = result.split(`\${${arg}}`).join(replacement);
       }
     });
@@ -201,7 +173,7 @@ export function CreateTemplateModal({
       category: category.trim(),
       messageRecipe: lines.filter((l) => l.length > 0),
     };
-    
+
     if (isEditMode && existingTemplate && onUpdate) {
       onUpdate(existingTemplate.id, templateData);
     } else {
@@ -210,175 +182,230 @@ export function CreateTemplateModal({
   };
 
   return (
-    <div className="grimoire-modal-overlay" onClick={onClose}>
-      <div className="grimoire-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="grimoire-modal-header">
-          <div className="grimoire-modal-title">
-            <Sparkles size={18} />
-            <span>{isEditMode ? "Edit Scroll" : "Inscribe New Scroll"}</span>
+    <>
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-auto"
+        onClick={onClose}
+      >
+        <div
+          className="w-full max-w-2xl max-h-[90vh] bg-gradient-to-br from-grimoire-bg-secondary to-grimoire-bg border border-grimoire-border rounded-lg shadow-2xl overflow-hidden flex flex-col pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-grimoire-border bg-gradient-to-r from-grimoire-gold/10 to-transparent">
+            <div className="flex items-center gap-2">
+              <Sparkles size={18} className="text-grimoire-gold" />
+              <span className="font-fantasy text-grimoire-gold font-semibold">
+                {isEditMode ? "Edit Scroll" : "Inscribe New Scroll"}
+              </span>
+            </div>
+            <button
+              className="p-1 rounded text-grimoire-text-dim hover:text-grimoire-text hover:bg-white/10 transition-all"
+              onClick={onClose}
+            >
+              <X size={18} />
+            </button>
           </div>
-          <button className="grimoire-modal-close" onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
 
-        <div className="grimoire-modal-progress">
-          <div className={`grimoire-progress-step ${step >= 1 ? "active" : ""}`}>
-            <span className="grimoire-step-number">1</span>
-            <span className="grimoire-step-label">Name</span>
-          </div>
-          <div className={`grimoire-progress-line ${step >= 2 ? "active" : ""}`} />
-          <div className={`grimoire-progress-step ${step >= 2 ? "active" : ""}`}>
-            <span className="grimoire-step-number">2</span>
-            <span className="grimoire-step-label">Category</span>
-          </div>
-          <div className={`grimoire-progress-line ${step >= 3 ? "active" : ""}`} />
-          <div className={`grimoire-progress-step ${step >= 3 ? "active" : ""}`}>
-            <span className="grimoire-step-number">3</span>
-            <span className="grimoire-step-label">Content</span>
-          </div>
-        </div>
-
-        <div className="grimoire-modal-content">
-          {/* Step 1: Name */}
-          {step === 1 && (
-            <div className="grimoire-step-content">
-              <div className="grimoire-step-icon">
-                <Wand2 size={32} />
+          {/* Progress Stepper */}
+          <div className="flex items-center justify-center gap-2 px-6 py-4 border-b border-grimoire-border/50">
+            <div className={`flex items-center ${step >= 1 ? "text-grimoire-gold" : "text-grimoire-text-dim"}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
+                step >= 1 ? "bg-grimoire-gold/20 border-2 border-grimoire-gold" : "bg-black/30 border border-grimoire-border"
+              }`}>
+                1
               </div>
-              <h3>Name Your Scroll</h3>
-              <p>
-                Choose a memorable name for your incantation. Use snake_case for
-                multi-word names.
-              </p>
-              <input
-                ref={nameInputRef}
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value.replace(/\s+/g, "_"))}
-                placeholder="my_awesome_scroll"
-                className="grimoire-name-input"
-                onKeyDown={(e) => e.key === "Enter" && canProceedStep1 && setStep(2)}
-              />
-              <div className="grimoire-step-actions">
+              <span className="ml-2 text-xs font-fantasy">Name</span>
+            </div>
+            <div className={`w-8 h-px ${step >= 2 ? "bg-grimoire-gold" : "bg-grimoire-border"}`} />
+            <div className={`flex items-center ${step >= 2 ? "text-grimoire-gold" : "text-grimoire-text-dim"}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
+                step >= 2 ? "bg-grimoire-gold/20 border-2 border-grimoire-gold" : "bg-black/30 border border-grimoire-border"
+              }`}>
+                2
+              </div>
+              <span className="ml-2 text-xs font-fantasy">Category</span>
+            </div>
+            <div className={`w-8 h-px ${step >= 3 ? "bg-grimoire-gold" : "bg-grimoire-border"}`} />
+            <div className={`flex items-center ${step >= 3 ? "text-grimoire-gold" : "text-grimoire-text-dim"}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
+                step >= 3 ? "bg-grimoire-gold/20 border-2 border-grimoire-gold" : "bg-black/30 border border-grimoire-border"
+              }`}>
+                3
+              </div>
+              <span className="ml-2 text-xs font-fantasy">Content</span>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+            {step === 1 && (
+              <div className="flex flex-col items-center text-center space-y-4">
+                <Wand2 size={32} className="text-grimoire-gold" />
+                <h3 className="text-xl font-fantasy font-bold text-grimoire-text">
+                  Name Your Scroll
+                </h3>
+                <p className="text-grimoire-text-dim text-sm max-w-md">
+                  Choose a memorable name for your incantation. Use snake_case for multi-word names.
+                </p>
+                <input
+                  ref={nameInputRef}
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value.replace(/\s+/g, "_"))}
+                  placeholder="my_awesome_scroll"
+                  className="w-full max-w-sm px-4 py-3 bg-black/30 border border-grimoire-border rounded text-grimoire-text text-center placeholder:text-grimoire-text-dim focus:outline-none focus:border-grimoire-gold-dim focus:ring-2 focus:ring-grimoire-gold-dim transition-all"
+                  onKeyDown={(e) => e.key === "Enter" && canProceedStep1 && setStep(2)}
+                />
                 <button
-                  className="grimoire-next-btn"
+                  className="px-6 py-2 bg-grimoire-gold/20 border border-grimoire-gold text-grimoire-gold font-fantasy font-semibold rounded hover:bg-grimoire-gold/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   disabled={!canProceedStep1}
                   onClick={() => setStep(2)}
                 >
                   Continue
                 </button>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Step 2: Category */}
-          {step === 2 && (
-            <div className="grimoire-step-content">
-              <div className="grimoire-step-icon">
-                <Scroll size={32} />
-              </div>
-              <h3>Choose a Category</h3>
-              <p>
-                Organize your scroll within a category. Select existing or create new.
-              </p>
-
-              <div className="grimoire-category-toggle">
-                <button
-                  className={!isNewCategory ? "active" : ""}
-                  onClick={() => setIsNewCategory(false)}
-                >
-                  Existing
-                </button>
-                <button
-                  className={isNewCategory ? "active" : ""}
-                  onClick={() => setIsNewCategory(true)}
-                >
-                  New Category
-                </button>
-              </div>
-
-              {isNewCategory ? (
-                <input
-                  type="text"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value.replace(/\s+/g, "_"))}
-                  placeholder="new_category"
-                  className="grimoire-name-input"
-                  onKeyDown={(e) => e.key === "Enter" && canProceedStep2 && setStep(3)}
-                />
-              ) : (
-                <div className="grimoire-category-grid">
-                  {existingCategories.map((cat) => (
-                    <button
-                      key={cat}
-                      className={`grimoire-category-option ${
-                        category === cat ? "selected" : ""
-                      }`}
-                      onClick={() => setCategory(cat)}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="grimoire-step-actions">
-                <button className="grimoire-back-btn" onClick={() => setStep(1)}>
-                  Back
-                </button>
-                <button
-                  className="grimoire-next-btn"
-                  disabled={!canProceedStep2}
-                  onClick={() => setStep(3)}
-                >
-                  Continue
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Content */}
-          {step === 3 && (
-            <div className="grimoire-step-content wide">
-              <div className="grimoire-content-header">
-                <h3>Write Your Incantation</h3>
-                <p>
-                  Use <code>$0</code>, <code>${"${0}"}</code> for numbered or{" "}
-                  <code>${"${name}"}</code> for named placeholders.
+            {step === 2 && (
+              <div className="flex flex-col items-center text-center space-y-4">
+                <Scroll size={32} className="text-grimoire-gold" />
+                <h3 className="text-xl font-fantasy font-bold text-grimoire-text">
+                  Choose a Category
+                </h3>
+                <p className="text-grimoire-text-dim text-sm max-w-md">
+                  Organize your scroll within a category. Select existing or create new.
                 </p>
-              </div>
 
-              <div className="grimoire-lines-editor">
-                {lines.map((line, index) => (
-                  <div key={index} className="grimoire-line-row">
-                    <span className="grimoire-line-number">{index + 1}</span>
-                    <div className="grimoire-line-input-wrapper">
+                <div className="flex gap-2 bg-black/20 rounded p-1 border border-grimoire-border/50">
+                  <button
+                    className={`px-4 py-2 rounded text-sm font-medium transition-all ${
+                      !isNewCategory
+                        ? "bg-grimoire-gold/20 text-grimoire-gold"
+                        : "text-grimoire-text-dim hover:text-grimoire-text"
+                    }`}
+                    onClick={() => setIsNewCategory(false)}
+                  >
+                    Existing
+                  </button>
+                  <button
+                    className={`px-4 py-2 rounded text-sm font-medium transition-all ${
+                      isNewCategory
+                        ? "bg-grimoire-gold/20 text-grimoire-gold"
+                        : "text-grimoire-text-dim hover:text-grimoire-text"
+                    }`}
+                    onClick={() => setIsNewCategory(true)}
+                  >
+                    New Category
+                  </button>
+                </div>
+
+                {isNewCategory ? (
+                  <input
+                    type="text"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value.replace(/\s+/g, "_"))}
+                    placeholder="new_category"
+                    className="w-full max-w-sm px-4 py-3 bg-black/30 border border-grimoire-border rounded text-grimoire-text text-center placeholder:text-grimoire-text-dim focus:outline-none focus:border-grimoire-gold-dim focus:ring-2 focus:ring-grimoire-gold-dim transition-all"
+                    onKeyDown={(e) => e.key === "Enter" && canProceedStep2 && setStep(3)}
+                  />
+                ) : (
+                  <div className="grid grid-cols-3 gap-2 w-full max-w-lg">
+                    {existingCategories.map((cat) => (
+                      <button
+                        key={cat}
+                        className={`px-3 py-2 rounded text-sm font-medium transition-all ${
+                          category === cat
+                            ? "bg-grimoire-gold/20 text-grimoire-gold border border-grimoire-gold/50"
+                            : "bg-black/20 text-grimoire-text-dim border border-grimoire-border/50 hover:text-grimoire-text hover:bg-black/30"
+                        }`}
+                        onClick={() => setCategory(cat)}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-4">
+                  <button
+                    className="px-6 py-2 bg-black/30 border border-grimoire-border text-grimoire-text-dim font-fantasy font-semibold rounded hover:text-grimoire-text hover:bg-black/40 transition-all"
+                    onClick={() => setStep(1)}
+                  >
+                    Back
+                  </button>
+                  <button
+                    className="px-6 py-2 bg-grimoire-gold/20 border border-grimoire-gold text-grimoire-gold font-fantasy font-semibold rounded hover:bg-grimoire-gold/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    disabled={!canProceedStep2}
+                    onClick={() => setStep(3)}
+                  >
+                    Continue
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-fantasy font-bold text-grimoire-text mb-1">
+                      Write Your Incantation
+                    </h3>
+                    <p className="text-grimoire-text-dim text-sm">
+                      Use <code className="px-1 py-0.5 bg-black/30 rounded text-grimoire-gold text-xs">$0</code>,{" "}
+                      <code className="px-1 py-0.5 bg-black/30 rounded text-grimoire-gold text-xs">${"{0}"}</code> for numbered or{" "}
+                      <code className="px-1 py-0.5 bg-black/30 rounded text-grimoire-gold text-xs">${"{name}"}</code> for named placeholders.
+                      Reference book fields with{" "}
+                      <code className="px-1 py-0.5 bg-black/30 rounded text-grimoire-accent-bright text-xs">${"{book.field}"}</code>.
+                    </p>
+                  </div>
+                  <button
+                    className="flex items-center gap-2 px-3 py-2 rounded bg-grimoire-accent/10 border border-grimoire-accent/50 text-grimoire-accent-bright hover:bg-grimoire-accent/20 text-sm whitespace-nowrap transition-all flex-shrink-0"
+                    onClick={() => {
+                      setAutocompleteLineIndex(lines.length - 1);
+                      setActiveInputRef(document.querySelector(`input[placeholder="Line ${lines.length}..."]`) as HTMLInputElement);
+                      setShowBookModal(true);
+                    }}
+                  >
+                    <Book size={14} />
+                    View Book
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {lines.map((line, index) => (
+                    <div key={index} className="flex items-center gap-2 relative">
+                      <span className="text-grimoire-text-dim text-xs w-6">{index + 1}</span>
                       <input
                         type="text"
                         value={line}
-                        onChange={(e) => {
-                          handleLineChange(index, e.target.value, e.target);
-                          setActiveInputRef(e.target);
-                          setAutocompleteLineIndex(index);
-                        }}
-                        onFocus={(e) => {
-                          setActiveInputRef(e.target);
-                          setAutocompleteLineIndex(index);
-                        }}
+                        onChange={(e) => handleLineChange(index, e.target.value, e.target)}
                         placeholder={`Line ${index + 1}...`}
-                        className="grimoire-line-input"
+                        className="flex-1 px-3 py-2 bg-black/30 border border-grimoire-border rounded text-grimoire-text text-sm font-grimoire placeholder:text-grimoire-text-dim focus:outline-none focus:border-grimoire-gold-dim focus:ring-1 focus:ring-grimoire-gold-dim transition-all"
                       />
+                      {lines.length > 1 && (
+                        <button
+                          className="p-2 rounded text-grimoire-text-dim hover:text-grimoire-red hover:bg-grimoire-red/10 transition-all"
+                          onClick={() => handleRemoveLine(index)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+
+                      {/* Autocomplete dropdown */}
                       {autocompleteLineIndex === index && autocompleteSuggestions.length > 0 && (
-                        <div className="grimoire-autocomplete-dropdown">
+                        <div className="absolute top-full left-6 right-0 mt-1 z-10 bg-grimoire-bg-secondary border border-grimoire-gold/50 rounded shadow-xl max-h-32 overflow-y-auto">
                           {autocompleteSuggestions.map((field) => (
                             <button
                               key={field}
-                              className="grimoire-autocomplete-item"
+                              className="w-full px-3 py-2 flex items-center justify-between text-sm hover:bg-grimoire-gold/10 transition-colors"
                               onClick={() => handleAutocompleteSelect(field)}
                             >
-                              <code>{"${book." + field + "}"}</code>
-                              <span className="grimoire-autocomplete-value">
+                              <code className="text-grimoire-gold font-grimoire text-xs">
+                                ${"{book." + field + "}"}
+                              </code>
+                              <span className="text-grimoire-text-dim text-xs">
                                 {bookFields[field]}
                               </span>
                             </button>
@@ -386,108 +413,115 @@ export function CreateTemplateModal({
                         </div>
                       )}
                     </div>
-                    {lines.length > 1 && (
-                      <button
-                        className="grimoire-line-remove"
-                        onClick={() => handleRemoveLine(index)}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <button className="grimoire-add-line" onClick={handleAddLine}>
-                  <Plus size={14} />
-                  Add Line
-                </button>
-                <button
-                  className="grimoire-book-reference-btn"
-                  onClick={() => setShowBookModal(true)}
-                  title="View all book fields"
-                >
-                  <Book size={14} />
-                  View Book Fields
-                </button>
-              </div>
-
-              {extractedArgs.length > 0 && (
-                <div className="grimoire-args-detected">
-                  <span>Detected placeholders:</span>
-                  {extractedArgs.map((arg) => (
-                    <code key={arg}>
-                      {/^\d+$/.test(arg) ? `$${arg}` : `\${${arg}}`}
-                    </code>
                   ))}
+
+                  <button
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded bg-black/20 border border-grimoire-border text-grimoire-text-dim hover:text-grimoire-text hover:bg-black/30 text-sm transition-all"
+                    onClick={handleAddLine}
+                  >
+                    <Plus size={14} />
+                    Add Line
+                  </button>
                 </div>
-              )}
 
-              {(() => {
-                const text = lines.join("\n");
-                const bookMatches = text.match(/\$\{book\.([a-zA-Z_][a-zA-Z0-9_]*)\}/g) || [];
-                const bookFieldsUsed = [...new Set(bookMatches.map((m) => m.slice(7, -1)))]; // Remove ${book. and }
-                return bookFieldsUsed.length > 0 ? (
-                  <div className="grimoire-args-detected grimoire-book-fields-detected">
-                    <span>Book fields used:</span>
-                    {bookFieldsUsed.map((field) => (
-                      <code key={field} title={bookFields[field] || "Not defined"}>
-                        {"${book." + field + "}"}
-                        <span className="grimoire-book-field-preview">
-                          = {bookFields[field] || "(not defined)"}
-                        </span>
-                      </code>
-                    ))}
+                {extractedArgs.length > 0 && (
+                  <div className="p-3 bg-grimoire-gold/10 border border-grimoire-gold/30 rounded">
+                    <span className="text-grimoire-gold font-fantasy text-xs font-semibold block mb-2">
+                      Detected placeholders:
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {extractedArgs.map((arg) => (
+                        <code
+                          key={arg}
+                          className="px-2 py-1 bg-grimoire-gold/20 border border-grimoire-gold/50 rounded text-grimoire-gold text-xs font-grimoire"
+                        >
+                          {/^\d+$/.test(arg) ? `$${arg}` : `\${${arg}}`}
+                        </code>
+                      ))}
+                    </div>
                   </div>
-                ) : null;
-              })()}
+                )}
 
-              <div className="grimoire-preview-section">
-                <button
-                  className="grimoire-preview-toggle"
-                  onClick={() => setShowPreview(!showPreview)}
-                >
-                  {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
-                  {showPreview ? "Hide Preview" : "Show Preview"}
-                </button>
-
-                {showPreview && (
-                  <>
-                    {extractedArgs.length > 0 && (
-                      <div className="grimoire-preview-args">
-                        {extractedArgs.map((arg, i) => (
-                          <input
-                            key={arg}
-                            type="text"
-                            placeholder={`${/^\d+$/.test(arg) ? `$${arg}` : arg} value...`}
-                            value={previewArgs[i] || ""}
-                            onChange={(e) => {
-                              const newArgs = [...previewArgs];
-                              newArgs[i] = e.target.value;
-                              setPreviewArgs(newArgs);
-                            }}
-                          />
+                {(() => {
+                  const text = lines.join("\n");
+                  const bookMatches = text.match(/\$\{book\.([a-zA-Z_][a-zA-Z0-9_]*)\}/g) || [];
+                  const bookFieldsUsed = [...new Set(bookMatches.map((m) => m.slice(7, -1)))];
+                  return bookFieldsUsed.length > 0 ? (
+                    <div className="p-3 bg-grimoire-accent/10 border border-grimoire-accent/30 rounded">
+                      <span className="text-grimoire-accent-bright font-fantasy text-xs font-semibold block mb-2">
+                        Book fields used:
+                      </span>
+                      <div className="space-y-1">
+                        {bookFieldsUsed.map((field) => (
+                          <div key={field} className="flex items-center justify-between px-3 py-1.5 bg-grimoire-accent/20 border border-grimoire-accent/50 rounded">
+                            <code className="text-grimoire-accent-bright text-xs font-grimoire">
+                              {"${book." + field + "}"}
+                            </code>
+                            <span className="text-grimoire-text-dim text-xs">
+                              {bookFields[field] || "(not defined)"}
+                            </span>
+                          </div>
                         ))}
                       </div>
-                    )}
-                    <pre className="grimoire-preview-output">{getPreview()}</pre>
-                  </>
-                )}
-              </div>
+                    </div>
+                  ) : null;
+                })()}
 
-              <div className="grimoire-step-actions">
-                <button className="grimoire-back-btn" onClick={() => setStep(2)}>
-                  Back
-                </button>
-                <button
-                  className="grimoire-create-final-btn"
-                  disabled={!canCreate}
-                  onClick={handleSubmit}
-                >
-                  <Sparkles size={14} />
-                  {isEditMode ? "Update Scroll" : "Inscribe Scroll"}
-                </button>
+                <div className="space-y-2">
+                  <button
+                    className="flex items-center gap-2 text-sm text-grimoire-text-dim hover:text-grimoire-text transition-all"
+                    onClick={() => setShowPreview(!showPreview)}
+                  >
+                    {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
+                    {showPreview ? "Hide Preview" : "Show Preview"}
+                  </button>
+
+                  {showPreview && (
+                    <>
+                      {extractedArgs.length > 0 && (
+                        <div className="space-y-2">
+                          {extractedArgs.map((arg, i) => (
+                            <input
+                              key={arg}
+                              type="text"
+                              placeholder={`${/^\d+$/.test(arg) ? `$${arg}` : arg} value...`}
+                              value={previewArgs[i] || ""}
+                              onChange={(e) => {
+                                const newArgs = [...previewArgs];
+                                newArgs[i] = e.target.value;
+                                setPreviewArgs(newArgs);
+                              }}
+                              className="w-full px-3 py-2 bg-black/30 border border-grimoire-border rounded text-grimoire-text text-sm placeholder:text-grimoire-text-dim focus:outline-none focus:border-grimoire-gold-dim transition-all"
+                            />
+                          ))}
+                        </div>
+                      )}
+                      <pre className="p-4 bg-black/40 border border-grimoire-gold/50 rounded text-grimoire-text text-xs font-grimoire overflow-x-auto whitespace-pre-wrap break-words">
+                        {getPreview()}
+                      </pre>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex gap-2 pt-4 border-t border-grimoire-border">
+                  <button
+                    className="px-6 py-2 bg-black/30 border border-grimoire-border text-grimoire-text-dim font-fantasy font-semibold rounded hover:text-grimoire-text hover:bg-black/40 transition-all"
+                    onClick={() => setStep(2)}
+                  >
+                    Back
+                  </button>
+                  <button
+                    className="flex-1 flex items-center justify-center gap-2 px-6 py-2 bg-gradient-to-b from-grimoire-gold to-grimoire-gold/80 border border-grimoire-gold-bright text-grimoire-bg font-fantasy font-bold rounded hover:from-grimoire-gold-bright hover:to-grimoire-gold hover:shadow-[0_0_20px_rgba(201,162,39,0.4)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    disabled={!canCreate}
+                    onClick={handleSubmit}
+                  >
+                    <Sparkles size={14} />
+                    {isEditMode ? "Update Scroll" : "Inscribe Scroll"}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -498,7 +532,6 @@ export function CreateTemplateModal({
           onSelect={handleBookModalSelect}
         />
       )}
-    </div>
+    </>
   );
 }
-

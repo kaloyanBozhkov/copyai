@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { Sparkles } from "lucide-react";
 import { ipcRenderer } from "@/utils/electron";
 import { CategorySidebar } from "./CategorySidebar";
 import { CommandDetail } from "./CommandDetail";
@@ -19,8 +20,6 @@ export default function CommandGrimoire() {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    ipcRenderer.send("grimoire-mounted");
-
     const handleInit = (_: unknown, data: { commands: CommandsData; settings: GrimoireSettings }) => {
       setCommandsData(data.commands);
       setSettings(data.settings);
@@ -34,9 +33,13 @@ export default function CommandGrimoire() {
       setSettings(data);
     };
 
+    // Register listeners BEFORE sending the mounted message
     ipcRenderer.on("grimoire-init", handleInit);
     ipcRenderer.on("grimoire-commands-data", handleCommandsData);
     ipcRenderer.on("grimoire-settings-data", handleSettingsData);
+
+    // Now send the mounted message
+    ipcRenderer.send("grimoire-mounted");
 
     return () => {
       ipcRenderer.removeListener("grimoire-init", handleInit);
@@ -96,15 +99,19 @@ export default function CommandGrimoire() {
 
   if (!commandsData || !settings) {
     return (
-      <div className="grimoire-loading">
-        <div className="grimoire-loading-rune" />
-        <span>Summoning the Grimoire...</span>
+      <div className="w-full h-full flex items-center justify-center bg-grimoire-bg font-serif-grimoire pointer-events-auto">
+        <div className="text-center space-y-4">
+          <Sparkles className="w-12 h-12 mx-auto text-grimoire-gold animate-pulse" />
+          <span className="text-grimoire-text font-fantasy text-lg">
+            Summoning the Grimoire...
+          </span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="grimoire-container">
+    <div className="w-full h-full flex flex-col bg-grimoire-bg text-grimoire-text font-serif-grimoire pointer-events-auto overflow-hidden">
       <GrimoireHeader
         onClose={handleClose}
         onMinimize={handleMinimize}
@@ -117,11 +124,9 @@ export default function CommandGrimoire() {
         isSettingsOpen={isSettingsOpen}
       />
 
-      <div className="grimoire-content">
+      <div className="flex-1 flex overflow-hidden">
         {isSettingsOpen && settings ? (
-          <div className="grimoire-settings-container">
-            <SettingsPanel settings={settings} />
-          </div>
+          <SettingsPanel settings={settings} />
         ) : (
           <>
             <CategorySidebar
@@ -152,6 +157,7 @@ export default function CommandGrimoire() {
               ...commandsData.customTemplates.map((t) => t.category),
             ]),
           ]}
+          bookFields={settings.book}
           onClose={() => setIsCreateModalOpen(false)}
           onCreate={handleCreateTemplate}
         />
@@ -165,6 +171,7 @@ export default function CommandGrimoire() {
               ...commandsData.customTemplates.map((t) => t.category),
             ]),
           ]}
+          bookFields={settings.book}
           existingTemplate={editingTemplate}
           onClose={() => setEditingTemplate(null)}
           onCreate={handleCreateTemplate}
@@ -174,4 +181,3 @@ export default function CommandGrimoire() {
     </div>
   );
 }
-

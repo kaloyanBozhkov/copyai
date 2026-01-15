@@ -40,81 +40,101 @@ export function BookFieldsModal({
   };
 
   return (
-    <div className="grimoire-modal-overlay" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-auto"
+      onClick={onClose}
+    >
       <div
-        className="grimoire-modal grimoire-book-modal"
+        className="w-full max-w-md bg-gradient-to-br from-grimoire-bg-secondary to-grimoire-bg border border-grimoire-border rounded-lg shadow-2xl overflow-hidden pointer-events-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="grimoire-modal-header">
-          <div className="grimoire-modal-title">
-            <Book size={18} />
-            <span>Book Fields Reference</span>
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-grimoire-border bg-gradient-to-r from-grimoire-gold/10 to-transparent">
+          <div className="flex items-center gap-2">
+            <Book size={18} className="text-grimoire-gold" />
+            <span className="font-fantasy text-grimoire-gold font-semibold">
+              Book Fields Reference
+            </span>
           </div>
-          <button className="grimoire-modal-close" onClick={onClose}>
+          <button
+            className="p-1 rounded text-grimoire-text-dim hover:text-grimoire-text hover:bg-white/10 transition-all"
+            onClick={onClose}
+          >
             <X size={18} />
           </button>
         </div>
 
-        <div className="grimoire-book-modal-search">
-          <Search size={16} className="grimoire-book-search-icon" />
-          <input
-            type="text"
-            placeholder="Search fields..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="grimoire-book-search-input"
-            autoFocus
-          />
+        {/* Search */}
+        <div className="p-4 border-b border-grimoire-border/50">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-grimoire-text-dim pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search fields..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-black/30 border border-grimoire-border rounded text-grimoire-text placeholder:text-grimoire-text-dim text-sm focus:outline-none focus:border-grimoire-gold-dim focus:ring-1 focus:ring-grimoire-gold-dim transition-all"
+              autoFocus
+            />
+          </div>
         </div>
 
-        <div className="grimoire-book-modal-content">
+        {/* Content */}
+        <div className="max-h-96 overflow-y-auto custom-scrollbar">
           {filteredFields.length === 0 ? (
-            <div className="grimoire-book-modal-empty">
-              <Book size={32} className="muted" />
-              <p>
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <Book size={32} className="text-grimoire-text-dim mb-3 opacity-50" />
+              <p className="text-grimoire-text-dim text-sm mb-1">
                 {searchQuery
                   ? "No fields match your search"
                   : "No book fields defined yet"}
               </p>
               {!searchQuery && (
-                <span className="grimoire-book-modal-hint">
+                <span className="text-grimoire-text-dim text-xs">
                   Add fields in Settings → The Book
                 </span>
               )}
             </div>
           ) : (
-            <div className="grimoire-book-fields-list">
+            <div className="p-2 space-y-1">
               {filteredFields.map(([field, value]) => (
                 <div
                   key={field}
-                  className={`grimoire-book-field-item ${onSelect ? "selectable" : ""}`}
+                  className={`p-3 bg-black/20 border border-grimoire-border/50 rounded transition-all ${
+                    onSelect
+                      ? "cursor-pointer hover:bg-grimoire-gold/10 hover:border-grimoire-gold/50"
+                      : ""
+                  }`}
                   onClick={() => onSelect && handleSelect(field)}
                 >
-                  <div className="grimoire-book-field-item-header">
-                    <code className="grimoire-book-field-ref">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <code className="text-grimoire-gold font-grimoire text-xs">
                       {"${book." + field + "}"}
                     </code>
                     <button
-                      className="grimoire-book-field-copy"
+                      className="relative p-1 rounded text-grimoire-text-dim hover:text-grimoire-gold hover:bg-grimoire-gold/10 transition-all"
                       onClick={(e) => handleCopy(field, e)}
                       title="Copy placeholder"
                     >
                       <Copy size={12} />
                       {copiedField === field && (
-                        <span className="grimoire-copied-label">Copied!</span>
+                        <span className="absolute -top-6 right-0 px-2 py-0.5 bg-grimoire-green text-white text-xs rounded whitespace-nowrap">
+                          Copied!
+                        </span>
                       )}
                     </button>
                   </div>
-                  <div className="grimoire-book-field-value">{value}</div>
+                  <div className="text-grimoire-text text-sm">{value}</div>
                 </div>
               ))}
             </div>
           )}
         </div>
 
+        {/* Footer */}
         {onSelect && filteredFields.length > 0 && (
-          <div className="grimoire-book-modal-footer">
-            <span className="grimoire-book-modal-hint">
+          <div className="px-4 py-2 border-t border-grimoire-border/50 bg-black/20">
+            <span className="text-grimoire-text-dim text-xs">
               Click a field to insert it
             </span>
           </div>
@@ -123,4 +143,3 @@ export function BookFieldsModal({
     </div>
   );
 }
-

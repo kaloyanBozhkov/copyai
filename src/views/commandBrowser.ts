@@ -132,20 +132,22 @@ export const showCommandBrowser = async (isDevMode = false): Promise<void> => {
   }
 
   browserWindow = new BrowserWindow({
-    width: 900,
-    height: 650,
-    minWidth: 700,
-    minHeight: 500,
+    width: 1400,
+    height: 800,
+    minWidth: 1200,
+    minHeight: 700,
     resizable: true,
     movable: true,
     show: false,
     frame: false,
-    titleBarStyle: "hidden",
+    transparent: false,
+    hasShadow: true,
     vibrancy: "under-window",
     visualEffectState: "active",
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
+      webSecurity: false, // Allow loading external resources like Google Fonts
     },
   });
 
@@ -162,24 +164,29 @@ export const showCommandBrowser = async (isDevMode = false): Promise<void> => {
   // Setup IPC handlers
   setupCommandBrowserIPC();
 
+  // Set up grimoire-mounted handler (for hot reloads too)
   ipcMain.removeAllListeners("grimoire-mounted");
+  ipcMain.on("grimoire-mounted", () => {
+    if (!browserWindow || browserWindow.isDestroyed()) return;
+    browserWindow.webContents.send("grimoire-init", {
+      commands: getCommandsData(),
+      settings: getSettings(),
+      isDevMode,
+    });
+  });
 
   return new Promise((resolve) => {
-    ipcMain.once("grimoire-mounted", () => {
-      if (!browserWindow || browserWindow.isDestroyed()) return;
-      browserWindow.webContents.send("grimoire-init", {
-        commands: getCommandsData(),
-        settings: getSettings(),
-        isDevMode,
-      });
-      browserWindow.show();
+    browserWindow!.loadFile(appPath, { query: { route: "grimoire" } });
+
+    // Show window after it loads
+    browserWindow!.once("ready-to-show", () => {
+      browserWindow?.show();
       resolve();
     });
 
-    browserWindow!.loadFile(appPath, { query: { route: "grimoire" } });
-
     browserWindow!.on("closed", () => {
       browserWindow = null;
+      ipcMain.removeAllListeners("grimoire-mounted");
       cleanupCommandBrowserIPC();
     });
   });
