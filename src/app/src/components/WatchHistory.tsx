@@ -18,9 +18,29 @@ const formatDate = (isoString: string): string => {
   });
 };
 
+// Check if title has episode pattern (e01, s01e01, episode 1, etc.)
+const hasEpisode = (title: string): boolean => {
+  return /(?:e|ep|episode\s*)\d{1,4}/i.test(title);
+};
+
+// Increment episode in title
+const getNextEpisodeTitle = (title: string): string => {
+  const episodeMatch = title.match(/(?:e|ep|episode\s*)(\d{1,4})/i);
+  if (!episodeMatch) return title;
+  
+  const currentEp = parseInt(episodeMatch[1], 10);
+  const newEp = currentEp + 1;
+  const newEpStr = newEp.toString().padStart(episodeMatch[1].length, "0");
+  
+  return title.replace(/(?:e|ep|episode\s*)\d{1,4}/i, (match) => {
+    return match.replace(/\d+/, newEpStr);
+  });
+};
+
 export const WatchHistory = () => {
   const [items, setItems] = useState<WatchHistoryItem[]>([]);
   const [toast, setToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("Copied to clipboard!");
 
   useEffect(() => {
     // Request initial data
@@ -37,7 +57,8 @@ export const WatchHistory = () => {
     };
   }, []);
 
-  const showToast = () => {
+  const showToast = (message = "Copied to clipboard!") => {
+    setToastMessage(message);
     setToast(true);
     setTimeout(() => setToast(false), 2000);
   };
@@ -65,8 +86,24 @@ export const WatchHistory = () => {
     ipcRenderer.send("watch-history-close");
   };
 
+  const playOnTV = (item: WatchHistoryItem) => {
+    ipcRenderer.send("watch-history-play", { title: item.title, type: item.type, target: "tv" });
+    showToast("Starting on TV...");
+  };
+
+  const playOnLaptop = (item: WatchHistoryItem) => {
+    ipcRenderer.send("watch-history-play", { title: item.title, type: item.type, target: "laptop" });
+    showToast("Starting on Laptop...");
+  };
+
+  const playNextEpisode = (item: WatchHistoryItem, target: "tv" | "laptop") => {
+    const nextTitle = getNextEpisodeTitle(item.title);
+    ipcRenderer.send("watch-history-play", { title: nextTitle, type: item.type, target });
+    showToast(`Starting ${nextTitle}...`);
+  };
+
   return (
-    <div className="w-full flex flex-col h-screen bg-linear-to-br from-[#1a1a2e] to-[#16213e] text-gray-200 select-text">
+    <div className="w-full flex flex-col h-screen bg-linear-to-br from-[#1a1a2e] to-[#16213e] text-gray-200 select-text pointer-events-auto">
       {/* Header */}
       <div
         className="flex justify-between items-center px-5 py-4 bg-black/30 border-b border-white/10"
@@ -108,14 +145,60 @@ export const WatchHistory = () => {
           items.map((item, idx) => (
             <div
               key={idx}
-              onClick={() => copyItem(item.title)}
-              className="flex items-center gap-3 px-4 py-3 bg-white/5 rounded-lg mb-2 hover:bg-white/10 transition-colors cursor-pointer"
+              className="flex items-center gap-3 px-4 py-3 bg-white/5 rounded-lg mb-2 hover:bg-white/10 transition-colors"
             >
               <span className="text-xl w-7 text-center">
                 {item.type === "anime" ? "🎌" : "🎬"}
               </span>
-              <span className="flex-1 text-sm font-medium">{item.title}</span>
-              <span className="text-xs text-gray-500 whitespace-nowrap">
+              <span 
+                className="flex-1 text-sm font-medium cursor-pointer hover:text-white"
+                onClick={() => copyItem(item.title)}
+                title="Click to copy"
+              >
+                {item.title}
+              </span>
+              
+              {/* Action buttons */}
+              <div className="flex items-center gap-1.5">
+                {/* Next Episode buttons (only if has episode) */}
+                {hasEpisode(item.title) && (
+                  <div className="flex items-center gap-1 mr-2 border-r border-white/10 pr-2">
+                    <span className="text-xs text-gray-500 mr-1">Next:</span>
+                    <button
+                      onClick={() => playNextEpisode(item, "tv")}
+                      className="p-1.5 bg-purple-600/50 hover:bg-purple-600 rounded text-xs transition-colors"
+                      title="Next episode on TV"
+                    >
+                      📺
+                    </button>
+                    <button
+                      onClick={() => playNextEpisode(item, "laptop")}
+                      className="p-1.5 bg-purple-600/50 hover:bg-purple-600 rounded text-xs transition-colors"
+                      title="Next episode on Laptop"
+                    >
+                      💻
+                    </button>
+                  </div>
+                )}
+                
+                {/* Play buttons */}
+                <button
+                  onClick={() => playOnTV(item)}
+                  className="p-1.5 bg-blue-600/50 hover:bg-blue-600 rounded text-xs transition-colors"
+                  title="Play on TV"
+                >
+                  📺
+                </button>
+                <button
+                  onClick={() => playOnLaptop(item)}
+                  className="p-1.5 bg-green-600/50 hover:bg-green-600 rounded text-xs transition-colors"
+                  title="Play on Laptop"
+                >
+                  💻
+                </button>
+              </div>
+              
+              <span className="text-xs text-gray-500 whitespace-nowrap ml-2">
                 {formatDate(item.watchedAt)}
               </span>
             </div>
@@ -129,7 +212,7 @@ export const WatchHistory = () => {
           toast ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >
-        Copied to clipboard!
+        {toastMessage}
       </div>
     </div>
   );
