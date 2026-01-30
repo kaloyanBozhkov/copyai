@@ -15,7 +15,7 @@ export type AutocompleteResultPayload = {
 };
 
 export type AppInitPayload = {
-  route: "command-input" | "processing-command";
+  route: "command-input" | "processing-command" | "watch-history";
   isDevMode?: boolean;
 };
 

@@ -73,7 +73,7 @@ import {
   isSupportedLanguage,
 } from "../../helpers/subs/opensubtitles";
 import { playSpotify } from "../../helpers/spotify";
-import { addToWatchHistory } from "../watchHistory";
+import { addToWatchHistory } from "../../helpers/webtorrent/watchHistory";
 import { showWatchHistory } from "../../views/watchHistory";
 
 // Helper to find and stream a movie torrent

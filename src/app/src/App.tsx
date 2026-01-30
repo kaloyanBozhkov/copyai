@@ -4,24 +4,30 @@ import { useInit } from "./hooks/useInit";
 import { useRouteStore } from "./store/useRouteStore";
 import { Thinking } from "./components/Thinking";
 import { CommandGrimoire } from "./components/grimoire";
+import { WatchHistory } from "./components/WatchHistory";
 
 export default function App() {
   useInit();
   const { route, setRoute } = useRouteStore();
-  const [isGrimoire, setIsGrimoire] = useState(false);
+  const [fullscreenRoute, setFullscreenRoute] = useState<string | null>(null);
 
-  // Check URL for grimoire route on mount
+  // Check URL for special routes on mount
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get("route") === "grimoire") {
-      setIsGrimoire(true);
-      setRoute("grimoire");
+    const urlRoute = urlParams.get("route");
+    if (urlRoute === "grimoire" || urlRoute === "watch-history") {
+      setFullscreenRoute(urlRoute);
+      setRoute(urlRoute);
     }
   }, [setRoute]);
 
-  // Grimoire has its own full-screen layout
-  if (isGrimoire || route === "grimoire") {
+  // Full-screen routes have their own layouts
+  if (fullscreenRoute === "grimoire" || route === "grimoire") {
     return <CommandGrimoire />;
+  }
+
+  if (fullscreenRoute === "watch-history" || route === "watch-history") {
+    return <WatchHistory />;
   }
 
   return (
