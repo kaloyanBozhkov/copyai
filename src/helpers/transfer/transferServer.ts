@@ -4,20 +4,9 @@ import path from "path";
 import os from "os";
 import { exec } from "child_process";
 import { transferPageHtml } from "./html";
+import { getLocalIP } from "../network/getLocalIP";
 
 const PORT = 8765;
-
-export const getLocalIP = () => {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name] ?? []) {
-      if (iface.family === "IPv4" && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return "localhost";
-};
 
 export const startTransferServer = async (): Promise<string> => {
   const transferPath = path.join(os.homedir(), "Downloads", "transfers");
@@ -89,4 +78,3 @@ export const startTransferServer = async (): Promise<string> => {
 
   return `Transfer server started at http://${localIP}:${PORT}`;
 };
-

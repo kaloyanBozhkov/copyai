@@ -17,7 +17,7 @@ export type ActiveProcess = DownloadProcess | StreamProcess;
 // Registry of process type handlers
 interface ProcessTypeHandler<T extends ActiveProcess = ActiveProcess> {
   getLabel: (process: T) => string;
-  onClick: (process: T) => boolean; // returns true if should terminate
+  onClick: (process: T) => boolean | "next_episode" | "refetch_subs"; // returns action to take
   onTerminate?: (process: T) => void; // optional cleanup on termination
 }
 
@@ -49,10 +49,33 @@ const updateTrayMenu = () => {
     return {
       label: handler.getLabel(process),
       click: () => {
-        const shouldTerminate = handler.onClick(process);
-        if (shouldTerminate) {
+        const result = handler.onClick(process);
+        
+        if (result === "refetch_subs") {
+          // Just refetch subtitles, don't terminate
+          if ("refetchSubtitles" in process && typeof process.refetchSubtitles === "function") {
+            process.refetchSubtitles();
+          }
+          return;
+        }
+        
+        if (result === "next_episode") {
+          // Terminate current and start next episode
           process.cleanup();
-          // Call onTerminate callback if provided
+          if (handler.onTerminate) {
+            handler.onTerminate(process);
+          }
+          removeActiveProcess(process.id);
+          
+          // Trigger next episode via the process's stored callback
+          if ("startNextEpisode" in process && typeof process.startNextEpisode === "function") {
+            process.startNextEpisode();
+          }
+          return;
+        }
+        
+        if (result === true) {
+          process.cleanup();
           if (handler.onTerminate) {
             handler.onTerminate(process);
           }

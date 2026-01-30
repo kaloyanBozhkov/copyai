@@ -22,6 +22,7 @@ export interface GrimoireSettings {
   apiKeys: Record<string, string>; // Dynamic API keys (e.g., OPENAI_API_KEY, OPENROUTER_API_KEY, custom keys)
   book: Record<string, string>; // Custom dictionary fields
   alchemy: AlchemyPotion[]; // Dynamic API-fetched values
+  localDomain?: string; // Custom local domain (e.g., "koko-mac.lan") for network streaming
 }
 
 const DEFAULT_SETTINGS: GrimoireSettings = {

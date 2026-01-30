@@ -34,6 +34,7 @@ import {
   getAlchemyPlaceholders,
   GrimoireSettings,
 } from "../kitchen/grimoireSettings";
+import { setupConsoleForwarding, stopConsoleForwarding, enableLogForwarding, disableLogForwarding } from "../electron/consoleForwarder";
 
 interface CommandInfo {
   name: string;
@@ -188,6 +189,9 @@ export const showCommandBrowser = async (isDevMode = false): Promise<void> => {
   // Setup IPC handlers
   setupCommandBrowserIPC();
 
+  // Setup console forwarding to renderer
+  setupConsoleForwarding(browserWindow);
+
   // Set up grimoire-mounted handler (for hot reloads too)
   ipcMain.removeAllListeners("grimoire-mounted");
   ipcMain.on("grimoire-mounted", () => {
@@ -212,6 +216,7 @@ export const showCommandBrowser = async (isDevMode = false): Promise<void> => {
       browserWindow = null;
       ipcMain.removeAllListeners("grimoire-mounted");
       cleanupCommandBrowserIPC();
+      stopConsoleForwarding();
     });
   });
 };
@@ -299,31 +304,36 @@ const setupCommandBrowserIPC = () => {
   ipcMain.on(
     "grimoire-execute-template",
     async (event, { messageRecipe, args }: { messageRecipe: string[]; args: string[] }) => {
-      const text = messageRecipe.join("\n");
-      const placeholders = extractPlaceholders(text);
-      
-      // Build values map from args array
-      const valuesMap: Record<string, string> = {};
-      placeholders.forEach((placeholder, index) => {
-        if (args && args[index] !== undefined) {
-          valuesMap[placeholder] = args[index];
-        }
-      });
-
-      // Fetch book and alchemy values
-      const bookValues = getBook();
-      let alchemyValues: Record<string, string> = {};
+      enableLogForwarding();
       try {
-        alchemyValues = await getAlchemyPlaceholders();
-      } catch (error) {
-        console.error("Failed to fetch alchemy values:", error);
+        const text = messageRecipe.join("\n");
+        const placeholders = extractPlaceholders(text);
+        
+        // Build values map from args array
+        const valuesMap: Record<string, string> = {};
+        placeholders.forEach((placeholder, index) => {
+          if (args && args[index] !== undefined) {
+            valuesMap[placeholder] = args[index];
+          }
+        });
+
+        // Fetch book and alchemy values
+        const bookValues = getBook();
+        let alchemyValues: Record<string, string> = {};
+        try {
+          alchemyValues = await getAlchemyPlaceholders();
+        } catch (error) {
+          console.error("Failed to fetch alchemy values:", error);
+        }
+        
+        // Merge all book + alchemy values for special placeholder replacement
+        const allValues = { ...bookValues, ...alchemyValues };
+        
+        const result = replacePlaceholders(text, valuesMap, allValues);
+        event.reply("grimoire-template-result", result);
+      } finally {
+        disableLogForwarding();
       }
-      
-      // Merge all book + alchemy values for special placeholder replacement
-      const allValues = { ...bookValues, ...alchemyValues };
-      
-      const result = replacePlaceholders(text, valuesMap, allValues);
-      event.reply("grimoire-template-result", result);
     }
   );
 
@@ -331,6 +341,7 @@ const setupCommandBrowserIPC = () => {
   ipcMain.on(
     "grimoire-execute-spell",
     async (event, { commandKey, args }: { commandKey: string; args: string[] }) => {
+      enableLogForwarding();
       try {
         console.log(`Casting spell: ${commandKey} with args:`, args);
         const result = await cmdKitchen(commandKey, args);
@@ -355,6 +366,8 @@ const setupCommandBrowserIPC = () => {
           success: false, 
           error: String(error) 
         });
+      } finally {
+        disableLogForwarding();
       }
     }
   );
@@ -414,6 +427,7 @@ const setupCommandBrowserIPC = () => {
   });
 
   ipcMain.on("grimoire-execute-potion", async (event, id: string) => {
+    enableLogForwarding();
     try {
       const potion = getPotion(id);
       if (!potion) {
@@ -425,6 +439,8 @@ const setupCommandBrowserIPC = () => {
       event.reply("grimoire-settings-data", getSettings());
     } catch (error) {
       event.reply("grimoire-potion-result", { error: String(error) });
+    } finally {
+      disableLogForwarding();
     }
   });
 };

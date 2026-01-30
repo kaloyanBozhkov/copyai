@@ -1,4 +1,9 @@
-import { flattenObjectDot, extractPlaceholders, extractAlchemyPlaceholders, replacePlaceholders } from "../helpers";
+import {
+  flattenObjectDot,
+  extractPlaceholders,
+  extractAlchemyPlaceholders,
+  replacePlaceholders,
+} from "../helpers";
 import { CommandExecutor } from "../commandExecutor";
 import { getBook, getAlchemy, executePotion } from "../grimoireSettings";
 
@@ -24,16 +29,16 @@ const template = (recipe: string[]): CommandExecutor => {
   const text = recipe.join("\n");
   const placeholders = extractPlaceholders(text);
   const alchemyPlaceholders = extractAlchemyPlaceholders(text);
-  
+
   // Create arg definitions - numbered ones show $N, named show the name
-  const argDefs = placeholders.map((p) => 
+  const argDefs = placeholders.map((p) =>
     /^\d+$/.test(p) ? `$${p}: string` : `${p}: string`
   );
 
   const buildFn = async (args?: string[]) => {
     // Get book values for ${book.field} replacement
     const bookValues = getBook();
-    
+
     // Fetch alchemy values for ${alchemy.potionName} replacement (only potions used in template)
     const alchemyValues: Record<string, string> = {};
     if (alchemyPlaceholders.length > 0) {
@@ -50,19 +55,20 @@ const template = (recipe: string[]): CommandExecutor => {
               alchemyValues[`alchemy.${potionName}`] = `[Error: ${error}]`;
             }
           } else {
-            alchemyValues[`alchemy.${potionName}`] = `[Potion not found: ${potionName}]`;
+            alchemyValues[`alchemy.${potionName}`] =
+              `[Potion not found: ${potionName}]`;
           }
         })
       );
     }
-    
+
     // Combine book and alchemy values
     const combinedValues = { ...bookValues, ...alchemyValues };
-    
+
     if (!args || args.length === 0) {
       return replacePlaceholders(text, {}, combinedValues);
     }
-    
+
     // Build a map of placeholder names to provided values
     const valuesMap: Record<string, string> = {};
     placeholders.forEach((placeholder, index) => {
@@ -70,7 +76,7 @@ const template = (recipe: string[]): CommandExecutor => {
         valuesMap[placeholder] = args[index];
       }
     });
-    
+
     return replacePlaceholders(text, valuesMap, combinedValues);
   };
 
@@ -171,6 +177,73 @@ Make sure to add a middleware that blocks requests not including an X-API-KEY he
 `,
       `{{with-prisma}}${commonIngredients.schemaRules}{{/with-prisma}}`,
     ],
+    ecommerce_recipe: [
+      `<instructions>
+You setup a full-stack next.js project with given tech. Follow best practices, use context7.
+Folder structure to follow for components: atomic design:
+components/ 
+-- atoms: simple components, like buttons, 
+-- molecules: multiple atoms together, larger components, have state
+-- organisms: made of molecules + atoms, have state and also side effects (API calls/actions)
+</instructions>
+<packages_to_use>
+PACKAGE MANAGER: pnpm
+- tailwind css
+- zod
+- zustand
+- @t3-oss/env-core
+- eslint (and other related packages for it to work)
+- prisma
+- stripe
+- react-email and @react-email/components
+- resend
+- i18next (default language: italian, only that for now)
+
+(My custom packages)
+- @koko420/react-components
+- @koko420/shared
+</packages_to_use>
+<important>
+- use "@" as alias for ./src folder
+- when a file's length exceeds 160 lines consider splitting it into multiple files if there's more than 1 function inside.. Essentially, prefer modularization over long files.
+- always use zod for paylaod schemas validation and type annotation
+</important>
+
+<schema_rules>
+  Prisma Schema Rules:
+- model name always singular
+- array property name always plural (1 to many)
+- models and field snake_case, because postgres does not like uppercase (makes everything lowecase)
+- model and field mapping (aliasing), to be avoided, because there is no corresponding field in the db
+- foreign keys, must be "(name of target model)_id" e.g. "user_id" and the object called like the target model e.g. "user"
+- field groups, core fields at the top (id, uuid, etc) then the actual fields A-Z, then the relations/foreign keys, then indexes
+- Prefer prisma (DB) enums where the type is known a priori, instead of the classic integer mapped to a code enum
+- all external ids must be prefixed by "external_" e.g. "external_kyc_id"
+- counts and booleans should have a default value, to avoid nulls (useful for filtering)
+- many to many, call relation "to_(name of target model in plural)" e.g. "to_users" where there is a relation between "user" and "group" and the relation is called "user_to_group"
+</schema_rules>
+<important_schema_note>After creating the prisma schema file, paste the <schema_rules> at its top as a comment so it's always clear to readers</important_schema_note>
+
+
+
+<scripts: below are scripts I usually use and how I like them>
+    "build": "next build",
+    "db:generate": "prisma migrate dev",
+    "db:migrate": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "dev": "next dev",
+    "email:dev": "email dev --dir ./src/app/_components/emails",
+    "postinstall": "prisma generate",
+    "lint": "next lint",
+    "start": "next start",
+    "stripe:webhook": "stripe listen --forward-to http://localhost:3000/api/stripe/webhook"
+</scripts
+
+<what_were_building>
+$0
+</what_were_building>`,
+    ],
   },
   ssh: {
     linkbase: [
@@ -198,10 +271,12 @@ export const messageComposers = flattenObjectDot(messageComposersPerCategory);
 export const templateDescriptions: Record<string, string> = {
   // Comments
   "comments.frame": "Create a framed comment block",
-  "comments.full_frame": "Create a full framed comment with top and bottom borders",
+  "comments.full_frame":
+    "Create a full framed comment with top and bottom borders",
   // Prompts
   "prompts.tag": "Wrap content in XML-style tags",
-  "prompts.system_message": "System message template with about/instructions/examples sections",
+  "prompts.system_message":
+    "System message template with about/instructions/examples sections",
   "prompts.tool_recipe": "Tool documentation template with usage guidelines",
   // Code
   "code.service_procedures_recipe": "Template for building service procedures",

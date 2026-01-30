@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Terminal } from "lucide-react";
 import { ipcRenderer } from "@/utils/electron";
 import { CategorySidebar } from "./CategorySidebar";
 import { CommandDetail } from "./CommandDetail";
@@ -9,6 +9,8 @@ import { GrimoireHeader } from "./GrimoireHeader";
 import { SettingsPanel } from "./SettingsPanel";
 import { BookModal } from "./BookModal";
 import { AlchemyModal } from "./AlchemyModal";
+import { LogsPanel } from "./LogsPanel";
+import { useConsoleLogs } from "../../hooks/useConsoleLogs";
 import type { CommandsData, CommandInfo, CustomTemplate, CustomSpell, GrimoireSettings } from "./types";
 
 export default function CommandGrimoire() {
@@ -26,6 +28,8 @@ export default function CommandGrimoire() {
   const [isAlchemyOpen, setIsAlchemyOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "execs" | "templates">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isLogsOpen, setIsLogsOpen] = useState(false);
+  const { logs, clearLogs } = useConsoleLogs();
 
   useEffect(() => {
     const handleInit = (_: unknown, data: { commands: CommandsData; settings: GrimoireSettings }) => {
@@ -308,6 +312,33 @@ export default function CommandGrimoire() {
           onClose={() => setEditingSpell(null)}
           onCreate={handleCreateSpell}
           onUpdate={handleUpdateSpell}
+        />
+      )}
+
+      {/* Logs Toggle Button */}
+      <button
+        onClick={() => setIsLogsOpen(!isLogsOpen)}
+        className={`fixed bottom-4 right-4 p-3 rounded-full shadow-lg transition-all z-40 ${
+          isLogsOpen
+            ? "bg-grimoire-accent/30 border-2 border-grimoire-accent-bright text-grimoire-accent-bright"
+            : "bg-grimoire-bg-secondary/90 border border-grimoire-border text-grimoire-text-dim hover:text-grimoire-accent-bright hover:border-grimoire-accent/50"
+        }`}
+        title="Toggle Console Logs"
+      >
+        <Terminal size={20} />
+        {logs.length > 0 && (
+          <span className="absolute -top-1 -right-1 bg-grimoire-red text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+            {logs.length > 99 ? "99+" : logs.length}
+          </span>
+        )}
+      </button>
+
+      {/* Logs Panel */}
+      {isLogsOpen && (
+        <LogsPanel
+          logs={logs}
+          onClose={() => setIsLogsOpen(false)}
+          onClear={clearLogs}
         />
       )}
     </div>

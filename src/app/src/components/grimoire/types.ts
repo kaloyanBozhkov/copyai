@@ -61,5 +61,6 @@ export interface GrimoireSettings {
   apiKeys: Record<string, string>;
   book: Record<string, string>;
   alchemy: AlchemyPotion[];
+  localDomain?: string;
 }
 

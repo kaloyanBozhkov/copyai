@@ -46,6 +46,7 @@ export function SettingsPanel({ settings }: SettingsPanelProps) {
 
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyValue, setNewKeyValue] = useState("");
+  const [localDomain, setLocalDomain] = useState(settings.localDomain || "");
 
   const handleUpdateKey = (index: number, value: string) => {
     const updated = [...apiKeys];
@@ -93,6 +94,10 @@ export function SettingsPanel({ settings }: SettingsPanelProps) {
 
   const isDefaultKey = (name: string) =>
     ["OPENAI_API_KEY", "OPENROUTER_API_KEY"].includes(name);
+
+  const handleSaveLocalDomain = () => {
+    ipcRenderer.send("grimoire-update-settings", { localDomain: localDomain.trim() || undefined });
+  };
 
   return (
     <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-6 space-y-8">
@@ -185,6 +190,42 @@ export function SettingsPanel({ settings }: SettingsPanelProps) {
               Add
             </ActionButton>
           </div>
+        </div>
+      </div>
+
+      {/* Local Domain Section */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 text-grimoire-accent-bright">
+          <span className="text-xl">🌐</span>
+          <h3 className="font-fantasy text-lg font-bold">Network Settings</h3>
+        </div>
+        <p className="text-grimoire-text-dim text-sm">
+          Set a custom local domain for streaming and file transfers & streaming servers. Leave empty to auto-detect.
+        </p>
+
+        <div className="space-y-2">
+          <label className="text-grimoire-text font-fantasy text-sm font-medium">
+            Local Domain
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={localDomain}
+              onChange={(e) => setLocalDomain(e.target.value)}
+              placeholder="e.g. koko-mac.lan or 192.168.1.100"
+              className="flex-1 px-3 py-2 bg-black/30 border border-grimoire-border rounded text-grimoire-text text-sm font-grimoire placeholder:text-grimoire-text-dim focus:outline-none focus:border-grimoire-accent focus:ring-1 focus:ring-grimoire-accent transition-all"
+            />
+            <ActionButton
+              variant="accent"
+              onClick={handleSaveLocalDomain}
+              icon={<Save size={14} />}
+            >
+              Save
+            </ActionButton>
+          </div>
+          <p className="text-grimoire-text-dim text-xs">
+            Used for: Movie/anime streaming • File transfer server • Network access
+          </p>
         </div>
       </div>
     </div>

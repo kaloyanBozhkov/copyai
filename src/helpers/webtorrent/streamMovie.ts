@@ -17,6 +17,36 @@ import {
   getSubtitlesFromDirectory,
 } from "../subs/convertSrt";
 import { SupportedLanguage } from "../subs/opensubtitles";
+import { parseSearchQuery } from "./parseSearchQuery";
+
+// Helper to increment episode in a search query
+const incrementEpisode = (title: string): string | null => {
+  const { episode, season } = parseSearchQuery(title);
+  
+  if (episode === null) {
+    return null; // No episode to increment
+  }
+  
+  const newEpisode = episode + 1;
+  
+  // Remove existing episode patterns and add new one
+  let newTitle = title
+    .replace(/\s*(?:e|ep|episode\s*)\d{1,4}/gi, "")
+    .trim();
+  
+  // Format episode consistently
+  const episodeStr = `e${newEpisode.toString().padStart(2, "0")}`;
+  
+  // If there's a season pattern, insert episode after it
+  const seasonMatch = newTitle.match(/(\s*(?:s|season\s*)\d{1,4})/i);
+  if (seasonMatch) {
+    newTitle = newTitle.replace(seasonMatch[0], `${seasonMatch[0]}${episodeStr}`);
+  } else {
+    newTitle = `${newTitle} ${episodeStr}`;
+  }
+  
+  return newTitle;
+};
 
 export interface StreamProcess {
   id: string;
@@ -30,6 +60,13 @@ export interface StreamProcess {
   downloadPath: string;
   torrentName: string;
   cleanup: () => void;
+  // For next episode / redownload subs functionality
+  originalTitle: string;
+  isAnime: boolean;
+  subsLanguage: string;
+  onStreamReady?: (url: string) => void;
+  refetchSubtitles: () => void;
+  startNextEpisode: () => void;
 }
 
 export const streamProcessUI = {
@@ -48,19 +85,36 @@ export const streamProcessUI = {
 
     return label;
   },
-  onClick: (process: StreamProcess) => {
+  onClick: (process: StreamProcess): boolean | "next_episode" | "refetch_subs" => {
+    const { episode } = parseSearchQuery(process.originalTitle);
+    const hasEpisode = episode !== null;
+    
+    const buttons = hasEpisode 
+      ? ["Cancel", "Next Episode", "Redownload Subtitles", "Terminate"]
+      : ["Cancel", "Redownload Subtitles", "Terminate"];
+    
     const response = dialog.showMessageBoxSync({
       type: "question",
-      buttons: ["Cancel", "Terminate"],
+      buttons,
       defaultId: 0,
-      title: "Terminate Stream",
-      message: "Do you want to terminate this stream?",
-      detail: process.name,
+      title: "Stream Options",
+      message: process.name,
+      detail: hasEpisode 
+        ? `Currently playing episode ${episode}. Choose an action:`
+        : "Choose an action:",
     });
 
-    if (response === 1) {
-      return true; // Signal to terminate
+    if (hasEpisode) {
+      // Buttons: Cancel(0), Next Episode(1), Redownload Subtitles(2), Terminate(3)
+      if (response === 1) return "next_episode";
+      if (response === 2) return "refetch_subs";
+      if (response === 3) return true;
+    } else {
+      // Buttons: Cancel(0), Redownload Subtitles(1), Terminate(2)
+      if (response === 1) return "refetch_subs";
+      if (response === 2) return true;
     }
+    
     return false;
   },
   onTerminate: (streamProcess: StreamProcess) => {
@@ -495,6 +549,8 @@ const buildVideoPlayerHTML = (videoUrl: string, videoName: string): string => {
 </html>`;
 };
 
+export { incrementEpisode };
+
 export const streamMovie = async ({
   magnetLinkUrl,
   downloadPath,
@@ -502,6 +558,7 @@ export const streamMovie = async ({
   subsLanguage = "eng",
   isAnime = false,
   onStreamReady,
+  onStartNextEpisode,
 }: {
   magnetLinkUrl: string;
   downloadPath: string;
@@ -509,6 +566,7 @@ export const streamMovie = async ({
   subsLanguage?: SupportedLanguage;
   isAnime?: boolean;
   onStreamReady?: (streamUrl: string) => void;
+  onStartNextEpisode?: (nextTitle: string) => void;
 }) => {
   // Kill previous stream if exists
   if (activeServer) {
@@ -582,46 +640,18 @@ export const streamMovie = async ({
             ? searchQueryFolder
             : path.join(searchQueryFolder, torrent.name);
 
-          // Add process to tray
-          addActiveProcess({
-            id: processId,
-            type: "stream",
-            name: movieFile.name,
-            progress: 0,
-            downloadSpeed: 0,
-            uploadSpeed: 0,
-            peers: 0,
-            activeConnections: 0,
-            downloadPath: searchQueryFolder,
-            // Store empty string for torrentName if it's a file, otherwise use folder name
-            torrentName: isFile ? "" : torrent.name,
-            cleanup: () => {
-              try {
-                if (idleCheckInterval) clearInterval(idleCheckInterval);
-                if (progressInterval) clearInterval(progressInterval);
-                if (server && server.listening) {
-                  server.close();
-                }
-                if (client && !client.destroyed) {
-                  client.destroy();
-                }
-              } catch (error) {
-                console.error("Error during stream cleanup:", error);
-              }
-            },
-          } as StreamProcess);
-
           // Create HTTP server for streaming
           const port = 8888;
           let activeConnections = 0;
           let downloadComplete = false;
           let lastConnectionCloseTime: number | null = null;
           let idleCheckInterval: NodeJS.Timeout | null = null;
+          let progressInterval: NodeJS.Timeout | null = null;
           let subtitlesFetched = false;
+          let server: http.Server;
 
           // Fetch subtitles from OpenSubtitles (once per stream)
           const fetchOpenSubtitles = async () => {
-            console.log("Fetching subtitles from OpenSubtitles...");
             if (subtitlesFetched) {
               console.log("Subtitles already fetched");
               return;
@@ -661,6 +691,64 @@ export const streamMovie = async ({
             }
           };
 
+          // Function to redownload subtitles
+          const refetchSubtitles = () => {
+            console.log("Redownloading subtitles...");
+            subtitlesFetched = false;
+            fetchOpenSubtitles();
+          };
+
+          // Function to start next episode
+          const startNextEpisode = () => {
+            const nextTitle = incrementEpisode(searchQuery);
+            if (!nextTitle) {
+              console.log("No episode found in title, cannot start next episode");
+              return;
+            }
+            console.log(`Starting next episode: ${nextTitle}`);
+            
+            if (onStartNextEpisode) {
+              onStartNextEpisode(nextTitle);
+            } else {
+              console.log("No onStartNextEpisode callback provided");
+            }
+          };
+
+          // Add process to tray
+          addActiveProcess({
+            id: processId,
+            type: "stream",
+            name: movieFile.name,
+            progress: 0,
+            downloadSpeed: 0,
+            uploadSpeed: 0,
+            peers: 0,
+            activeConnections: 0,
+            downloadPath: searchQueryFolder,
+            // Store empty string for torrentName if it's a file, otherwise use folder name
+            torrentName: isFile ? "" : torrent.name,
+            originalTitle: searchQuery,
+            isAnime,
+            subsLanguage,
+            onStreamReady,
+            refetchSubtitles,
+            startNextEpisode,
+            cleanup: () => {
+              try {
+                if (idleCheckInterval) clearInterval(idleCheckInterval);
+                if (progressInterval) clearInterval(progressInterval);
+                if (server && server.listening) {
+                  server.close();
+                }
+                if (client && !client.destroyed) {
+                  client.destroy();
+                }
+              } catch (error) {
+                console.error("Error during stream cleanup:", error);
+              }
+            },
+          } as StreamProcess);
+
           const checkAndCleanup = () => {
             // Only cleanup if download is complete AND no active connections AND 5 minutes have passed
             if (downloadComplete && activeConnections === 0) {
@@ -683,7 +771,7 @@ export const streamMovie = async ({
             }
           };
 
-          const server = http.createServer((req, res) => {
+          server = http.createServer((req, res) => {
             activeConnections++;
             lastConnectionCloseTime = null; // Reset idle timer when new connection comes in
             console.log(
@@ -962,7 +1050,7 @@ export const streamMovie = async ({
 
           server.listen(port, "0.0.0.0", () => {
             const streamUrl = `http://localhost:${port}`;
-            const networkUrl = `http://koko-mac.com:${port}`;
+            const networkUrl = `http://koko-mac.lan:${port}`;
             console.log(`Movie streaming at: ${streamUrl}`);
             console.log(`Movie: ${movieFile.name}`);
             console.log(`Access from network: ${networkUrl}`);
@@ -1040,7 +1128,7 @@ export const streamMovie = async ({
           process.on("SIGTERM", cleanup);
 
           // Show progress
-          let progressInterval: NodeJS.Timeout | null = setInterval(() => {
+          progressInterval = setInterval(() => {
             console.log(`Progress: ${(torrent.progress * 100).toFixed(1)}%`);
             console.log(
               `Download speed: ${(torrent.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s`

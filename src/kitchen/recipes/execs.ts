@@ -73,6 +73,8 @@ import {
   isSupportedLanguage,
 } from "../../helpers/subs/opensubtitles";
 import { playSpotify } from "../../helpers/spotify";
+import { addToWatchHistory } from "../watchHistory";
+import { showWatchHistory } from "../../views/watchHistory";
 
 // Helper to find and stream a movie torrent
 const streamMovieTorrent = async (
@@ -88,58 +90,70 @@ const streamMovieTorrent = async (
   const title = text.split(" -")[0].trim();
   if (!title) return "no movie title provided";
 
-  const { searchText } = parseSearchQuery(title);
-  console.log("searching torrent for ", searchText);
-  const link = await getPiratebaySearchLink(searchText);
-  const {
-    elementsHTML: selectedItemsElementsHTML,
-    text: selectedItemsHTML,
-  } = await getPageHTMLWithJS({
-    url: link,
-    selector: "ol li",
-    limit: 20,
-    skip: 1,
-    returnOuterHTML: true,
-  });
+  // Inner function to allow recursion for next episode
+  const startStream = async (searchTitle: string): Promise<string | null> => {
+    const { searchText } = parseSearchQuery(searchTitle);
+    console.log("searching torrent for ", searchText);
+    const link = await getPiratebaySearchLink(searchText);
+    const {
+      elementsHTML: selectedItemsElementsHTML,
+      text: selectedItemsHTML,
+    } = await getPageHTMLWithJS({
+      url: link,
+      selector: "ol li",
+      limit: 20,
+      skip: 1,
+      returnOuterHTML: true,
+    });
 
-  if (selectedItemsHTML.length === 0) {
-    return null;
-  }
+    if (selectedItemsHTML.length === 0) {
+      return null;
+    }
 
-  const { index } = await retry(
-    async () => {
-      return getLLMResponse({
-        systemMessage: await getMovieSystemMessage(selectedItemsHTML),
-        userMessage: title,
-        schema: z.object({
-          index: z.number(),
-        }),
-      });
-    },
-    3,
-    false
-  );
+    const { index } = await retry(
+      async () => {
+        return getLLMResponse({
+          systemMessage: await getMovieSystemMessage(selectedItemsHTML),
+          userMessage: searchTitle,
+          schema: z.object({
+            index: z.number(),
+          }),
+        });
+      },
+      3,
+      false
+    );
 
-  const selectedItem = selectedItemsElementsHTML[index];
-  if (!selectedItem) return null;
-  if (selectedItem.indexOf("00000000000000") !== -1) return null;
+    const selectedItem = selectedItemsElementsHTML[index];
+    if (!selectedItem) return null;
+    if (selectedItem.indexOf("00000000000000") !== -1) return null;
 
-  const magnetLink = parse(selectedItem).querySelector('a[href^="magnet:?"]');
-  if (!magnetLink) return null;
-  const magnetLinkUrl = magnetLink.getAttribute("href");
-  if (!magnetLinkUrl) return null;
+    const magnetLink = parse(selectedItem).querySelector('a[href^="magnet:?"]');
+    if (!magnetLink) return null;
+    const magnetLinkUrl = magnetLink.getAttribute("href");
+    if (!magnetLinkUrl) return null;
 
-  const downloadPath = path.join(os.homedir(), "Downloads", "movies");
+    const downloadPath = path.join(os.homedir(), "Downloads", "movies");
 
-  await streamMovie({
-    magnetLinkUrl,
-    downloadPath,
-    searchQuery: title,
-    subsLanguage,
-    onStreamReady,
-  });
+    // Add to watch history
+    addToWatchHistory(searchTitle, "movie");
 
-  return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
+    await streamMovie({
+      magnetLinkUrl,
+      downloadPath,
+      searchQuery: searchTitle,
+      subsLanguage,
+      onStreamReady,
+      onStartNextEpisode: (nextTitle) => {
+        // Recursively start the next episode stream
+        startStream(nextTitle);
+      },
+    });
+
+    return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
+  };
+
+  return startStream(title);
 };
 
 // Helper to find and stream an anime torrent
@@ -155,83 +169,96 @@ const streamAnimeTorrent = async (
   }
   const title = text.split(" -")[0].trim();
   if (!title) return "no anime title provided";
-  const { searchText, season, episode } = parseSearchQuery(title, true);
 
-  const searchPages = async (
-    withSeasonEpisode: boolean
-  ): Promise<string | null> => {
-    let page = 1;
-    while (true) {
-      const link = await getAnimeSearchLink({
-        search: searchText,
-        page,
-        ...(withSeasonEpisode && {
-          season: season ?? undefined,
-          episode: episode ?? undefined,
-        }),
-      });
+  // Inner function to allow recursion for next episode
+  const startStream = async (searchTitle: string): Promise<string | null> => {
+    const { searchText, season, episode } = parseSearchQuery(searchTitle, true);
 
-      const {
-        elementsHTML: selectedItemsElementsHTML,
-        text: selectedItemsHTML,
-      } = await getPageHTMLWithJS({
-        url: link,
-        selector: "tbody tr",
-        limit: 50,
-        skip: 1,
-        returnOuterHTML: true,
-      });
+    const searchPages = async (
+      withSeasonEpisode: boolean
+    ): Promise<string | null> => {
+      let page = 1;
+      while (true) {
+        const link = await getAnimeSearchLink({
+          search: searchText,
+          page,
+          ...(withSeasonEpisode && {
+            season: season ?? undefined,
+            episode: episode ?? undefined,
+          }),
+        });
 
-      if (selectedItemsHTML.length === 0) return null;
+        const {
+          elementsHTML: selectedItemsElementsHTML,
+          text: selectedItemsHTML,
+        } = await getPageHTMLWithJS({
+          url: link,
+          selector: "tbody tr",
+          limit: 50,
+          skip: 1,
+          returnOuterHTML: true,
+        });
 
-      const { index } = await retry(
-        async () => {
-          return getLLMResponse({
-            systemMessage: await getAnimeSystemMessage(selectedItemsHTML),
-            userMessage: title,
-            schema: z.object({
-              index: z.number(),
-            }),
-          });
-        },
-        3,
-        false
-      );
+        if (selectedItemsHTML.length === 0) return null;
 
-      const selectedItem = selectedItemsElementsHTML[index];
-      if (selectedItem) {
-        const magnetLink = parse(selectedItem).querySelector(
-          'a[href^="magnet:?"]'
+        const { index } = await retry(
+          async () => {
+            return getLLMResponse({
+              systemMessage: await getAnimeSystemMessage(selectedItemsHTML),
+              userMessage: searchTitle,
+              schema: z.object({
+                index: z.number(),
+              }),
+            });
+          },
+          3,
+          false
         );
-        const url = magnetLink?.getAttribute("href");
-        if (url) return url;
-      }
 
-      page++;
+        const selectedItem = selectedItemsElementsHTML[index];
+        if (selectedItem) {
+          const magnetLink = parse(selectedItem).querySelector(
+            'a[href^="magnet:?"]'
+          );
+          const url = magnetLink?.getAttribute("href");
+          if (url) return url;
+        }
+
+        page++;
+      }
+    };
+
+    let magnetLinkUrl: string | null = null;
+    if (season || episode) {
+      magnetLinkUrl = await searchPages(true);
     }
+    if (!magnetLinkUrl) {
+      magnetLinkUrl = await searchPages(false);
+    }
+    if (!magnetLinkUrl) return null;
+
+    const downloadPath = path.join(os.homedir(), "Downloads", "movies");
+
+    // Add to watch history
+    addToWatchHistory(searchTitle, "anime");
+
+    await streamMovie({
+      magnetLinkUrl,
+      downloadPath,
+      searchQuery: searchTitle,
+      subsLanguage,
+      isAnime: true,
+      onStreamReady,
+      onStartNextEpisode: (nextTitle) => {
+        // Recursively start the next episode stream
+        startStream(nextTitle);
+      },
+    });
+
+    return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
   };
 
-  let magnetLinkUrl: string | null = null;
-  if (season || episode) {
-    magnetLinkUrl = await searchPages(true);
-  }
-  if (!magnetLinkUrl) {
-    magnetLinkUrl = await searchPages(false);
-  }
-  if (!magnetLinkUrl) return null;
-
-  const downloadPath = path.join(os.homedir(), "Downloads", "movies");
-
-  await streamMovie({
-    magnetLinkUrl,
-    downloadPath,
-    searchQuery: title,
-    subsLanguage,
-    isAnime: true,
-    onStreamReady,
-  });
-
-  return `Stream started: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
+  return startStream(title);
 };
 
 // Helper to create room-specific commands
@@ -776,6 +803,14 @@ export const execsPerCategory: Record<
         return `Download started for: ${magnetLinkUrl.split("&")[0].substring(0, 60)}...`;
       },
       "title: string, S_E_: string",
+    ],
+  },
+  media: {
+    watch_history: [
+      async () => {
+        showWatchHistory();
+        return "Opening watch history...";
+      },
     ],
   },
   transfer: {
