@@ -17,6 +17,8 @@ import {
 import {
   turnOnTV,
   turnOffTV,
+  turnOnTVScreen,
+  turnOffTVScreen,
   setTVVolume,
   setupTV,
   launchTVApp,
@@ -818,31 +820,47 @@ export const execsPerCategory: Record<
   },
   tv: {
     movie_stream: [
-      async (args?: string[]) =>
-        streamMovieTorrent(args, (url) => {
+      async (args?: string[]) => {
+        console.log("[TV] Starting movie stream with args:", args);
+        return streamMovieTorrent(args, (url) => {
+          console.log("[TV] Stream ready, opening TV browser:", url);
           openTVBrowser(url);
           setAllLightsState(false).then(() => console.log("Lights off for movie"));
-        }),
+        });
+      },
       "title: string, subs-language?: -eng | -bul | -ita",
     ],
     anime_stream: [
-      async (args?: string[]) =>
-        streamAnimeTorrent(args, (url) => {
+      async (args?: string[]) => {
+        console.log("[TV] Starting anime stream with args:", args);
+        return streamAnimeTorrent(args, (url) => {
+          console.log("[TV] Stream ready, opening TV browser:", url);
           openTVBrowser(url);
           setAllLightsState(false).then(() => console.log("Lights off for anime"));
-        }),
+        });
+      },
       "title: string, subsLanguage?: -eng | -bul | -ita",
     ],
   },
   laptop: {
     movie_stream: [
-      async (args?: string[]) =>
-        streamMovieTorrent(args, (url) => exec(`open "${url}"`)),
+      async (args?: string[]) => {
+        console.log("[Laptop] Starting movie stream with args:", args);
+        return streamMovieTorrent(args, (url) => {
+          console.log("[Laptop] Stream ready, opening browser:", url);
+          exec(`open "${url}"`);
+        });
+      },
       "title: string, subs-language?: -eng | -bul | -ita",
     ],
     anime_stream: [
-      async (args?: string[]) =>
-        streamAnimeTorrent(args, (url) => exec(`open "${url}"`)),
+      async (args?: string[]) => {
+        console.log("[Laptop] Starting anime stream with args:", args);
+        return streamAnimeTorrent(args, (url) => {
+          console.log("[Laptop] Stream ready, opening browser:", url);
+          exec(`open "${url}"`);
+        });
+      },
       "title: string, subsLanguage?: -eng | -bul | -ita",
     ],
   },
@@ -921,6 +939,8 @@ export const execsPerCategory: Record<
     tv: {
       on: [async () => turnOnTV()],
       off: [async () => turnOffTV()],
+      screen_on: [async () => turnOnTVScreen()],
+      screen_off: [async () => turnOffTVScreen()],
       volume: [
         async (args?: string[]) => {
           const volume = parseInt(args?.[0] ?? "20", 10);
@@ -1159,7 +1179,9 @@ export const execDescriptions: Record<string, string> = {
   "lights.to": "Set all lights brightness and/or color",
   // TV
   "tv.on": "Turn on the TV",
-  "tv.off": "Turn off the TV",
+  "tv.off": "Turn off the TV (cant turn on without manual remote)",
+  "tv.screen_on": "Turn on the TV screen",
+  "tv.screen_off": "Turn off the TV screen",
   "tv.volume": "Set TV volume (0-100)",
   "tv.setup": "Setup TV connection",
   "tv.apps": "List available TV apps",

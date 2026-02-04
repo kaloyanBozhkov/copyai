@@ -6,6 +6,15 @@ module.exports = {
     asar: true,
     icon: "./src/assets/copyai-logo",
     extraResource: ["./src/assets/copyai-logo.png"],
+    // macOS Local Network permission - required for LG TV connection
+    extendInfo: {
+      NSLocalNetworkUsageDescription: "CopyAI needs local network access to control your LG TV and other smart devices.",
+      NSBonjourServices: [
+        "_webos._tcp",
+        "_lgtv._tcp", 
+        "_http._tcp"
+      ]
+    }
   },
   rebuildConfig: {},
   makers: [

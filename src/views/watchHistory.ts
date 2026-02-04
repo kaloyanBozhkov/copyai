@@ -74,7 +74,7 @@ const setupWatchHistoryIPC = () => {
 
   ipcMain.on(
     "watch-history-play",
-    (
+    async (
       _event,
       {
         title,
@@ -92,8 +92,13 @@ const setupWatchHistoryIPC = () => {
             ? "laptop.anime_stream"
             : "laptop.movie_stream";
 
-      console.log(`Playing ${title} via ${commandKey}`);
-      cmdKitchen(commandKey, [title]);
+      console.log(`[Watch History] Playing "${title}" via ${commandKey}`);
+      try {
+        const result = await cmdKitchen(commandKey, [title]);
+        console.log(`[Watch History] Command result:`, result);
+      } catch (error) {
+        console.error(`[Watch History] Command failed:`, error);
+      }
     }
   );
 };

@@ -1,4 +1,5 @@
 import lgtv from "lgtv2";
+import WebSocket, { RawData } from "ws";
 import path from "path";
 import os from "os";
 import fs from "fs";
@@ -8,7 +9,7 @@ import appsMap from "./apps.json";
 // Only affects this connection, safe for local network
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
-// Use secure WebSocket for newer LG WebOS
+// WebSocket connection to LG TV (wss:// for secure connection)
 const TV_URL = process.env.LG_TV_URL || "wss://192.168.1.70:3001";
 const KEY_FILE_PATH = path.join(os.homedir(), ".copyai", "lg-tv-key");
 
@@ -148,6 +149,44 @@ export const turnOffTV = async (): Promise<string> => {
     return "TV turned off";
   } catch (error) {
     return `Failed to turn off TV: ${error instanceof Error ? error.message : String(error)}`;
+  }
+};
+
+/**
+ * Turn off the TV screen (display only, TV stays on)
+ */
+export const turnOffTVScreen = async (): Promise<string> => {
+  try {
+    await connectAndExecute(async (tv) => {
+      return new Promise((resolve, reject) => {
+        tv.request("ssap://system/setScreenOff", (err: Error, res: any) => {
+          if (err) reject(err);
+          else resolve(res);
+        });
+      });
+    });
+    return "TV screen turned off";
+  } catch (error) {
+    return `Failed to turn off TV screen: ${error instanceof Error ? error.message : String(error)}`;
+  }
+};
+
+/**
+ * Turn on the TV screen
+ */
+export const turnOnTVScreen = async (): Promise<string> => {
+  try {
+    await connectAndExecute(async (tv) => {
+      return new Promise((resolve, reject) => {
+        tv.request("ssap://system/setScreenOn", (err: Error, res: any) => {
+          if (err) reject(err);
+          else resolve(res);
+        });
+      });
+    });
+    return "TV screen turned on";
+  } catch (error) {
+    return `Failed to turn on TV screen: ${error instanceof Error ? error.message : String(error)}`;
   }
 };
 
@@ -368,7 +407,56 @@ export const listTVApps = async (): Promise<string> => {
 };
 
 /**
- * Setup TV pairing and save the key file
+ * Get the LG TV handshake payload for pairing
+ */
+const getHandshakePayload = (existingKey: string | null) => ({
+  type: "register",
+  id: "register_0",
+  payload: {
+    forcePairing: false,
+    pairingType: "PROMPT",
+    "client-key": existingKey || undefined,
+    manifest: {
+      manifestVersion: 1,
+      appVersion: "1.1",
+      signed: {
+        created: "20140509",
+        appId: "com.lge.test",
+        vendorId: "com.lge",
+        localizedAppNames: {
+          "": "LG Remote App",
+          "ko-KR": "LG Remote App",
+          "zxx-XX": "LG Remote App",
+        },
+        localizedVendorNames: { "": "LG Electronics" },
+        permissions: [
+          "TEST_SECURE", "CONTROL_INPUT_TEXT", "CONTROL_MOUSE_AND_KEYBOARD",
+          "READ_INSTALLED_APPS", "READ_LGE_SDX", "READ_NOTIFICATIONS", "SEARCH",
+          "WRITE_SETTINGS", "WRITE_NOTIFICATION_ALERT", "CONTROL_POWER",
+          "READ_CURRENT_CHANNEL", "READ_RUNNING_APPS", "READ_UPDATE_INFO",
+          "UPDATE_FROM_REMOTE_APP", "READ_LGE_TV_INPUT_EVENTS", "READ_TV_CURRENT_TIME",
+        ],
+        serial: "SerialNumber",
+      },
+      permissions: [
+        "LAUNCH", "LAUNCH_WEBAPP", "APP_TO_APP", "CLOSE", "TEST_OPEN", "TEST_PROTECTED",
+        "CONTROL_AUDIO", "CONTROL_DISPLAY", "CONTROL_INPUT_JOYSTICK",
+        "CONTROL_INPUT_MEDIA_RECORDING", "CONTROL_INPUT_MEDIA_PLAYBACK",
+        "CONTROL_INPUT_TV", "CONTROL_POWER", "READ_APP_STATUS", "READ_CURRENT_CHANNEL",
+        "READ_INPUT_DEVICE_LIST", "READ_NETWORK_STATE", "READ_RUNNING_APPS",
+        "READ_TV_CHANNEL_LIST", "WRITE_NOTIFICATION_TOAST", "READ_POWER_STATE",
+        "READ_COUNTRY_INFO",
+      ],
+      signatures: [{
+        signatureVersion: 1,
+        signature: "eyJhbGdvcml0aG0iOiJSU0EtU0hBMjU2Iiwia2V5SWQiOiJ0ZXN0LXNpZ25pbmctY2VydCIsInNpZ25hdHVyZVZlcnNpb24iOjF9.hrVRgjCwXVvE2OOSpDZ58hR+59aFNwYDyjQgKk3auukd7pcegmE2CzPCa0bJ0ZsRAcKkCTJrWo5iDzNhMBWRyaMOv5zWSrthlf7G128qvIlpMT0YNY+n/FaOHE73uLrS/g7swl3/qH/BGFG2Hu4RlL48eb3lLKqTt2xKHdCs6Cd4RMfJPYnzgvI4BNrFUKsjkcu+WD4OO2A27Pq1n50cMchmcaXadJhGrOqH5YmHdOCj5NSHzJYrsW0HPlpuAx/ECMeIZYDh6RMqaFM2DXzdKX9NmmyqzJ3o/0lkk/N97gfVRLW5hA29yeAwaCViZNCP8iC9aO0q9fQojoa7NQnAtw==",
+      }],
+    },
+  },
+});
+
+/**
+ * Setup TV pairing and save the key file using raw WebSocket
  * @param force - Force re-pairing even if key exists
  */
 export const setupTV = async (force: boolean = false): Promise<string> => {
@@ -386,72 +474,65 @@ export const setupTV = async (force: boolean = false): Promise<string> => {
     ensureConfigDir();
     console.log(`Attempting to connect to TV at ${TV_URL}...`);
 
-    return await new Promise((resolve, reject) => {
-      let tvInstance: any = null;
-
-      const cleanup = () => {
-        if (tvInstance) {
-          try {
-            tvInstance.disconnect();
-          } catch (e) {
-            // Ignore disconnect errors
-          }
-        }
-      };
-
-      // Set timeout
-      const timeout = setTimeout(() => {
-        cleanup();
-        reject(new Error("Setup timeout - TV not responding"));
-      }, 15000);
-
+    // Get existing key if available
+    let existingKey: string | null = null;
+    if (fs.existsSync(KEY_FILE_PATH)) {
       try {
-        tvInstance = lgtv({
-          url: TV_URL,
-          timeout: 15000,
-          reconnect: false,
-          keyFile: KEY_FILE_PATH,
-          // Disable SSL certificate validation for self-signed certs
-          wsOptions: {
-            rejectUnauthorized: false,
-          },
-        });
-      } catch (error) {
-        clearTimeout(timeout);
-        reject(error);
-        return;
+        existingKey = fs.readFileSync(KEY_FILE_PATH, "utf8").trim() || null;
+      } catch {
+        existingKey = null;
       }
+    }
 
-      let prompted = false;
+    return await new Promise((resolve, reject) => {
+      const ws = new WebSocket(TV_URL, { rejectUnauthorized: false });
 
-      tvInstance.on("prompt", () => {
-        prompted = true;
-        console.log("✓ TV responded! Please accept the pairing request on your TV screen...");
+      const timeoutId = setTimeout(() => {
+        ws.close();
+        reject(new Error("Setup timeout - TV not responding after 30s"));
+      }, 30000);
+
+      ws.on("open", () => {
+        console.log("✓ WebSocket connected, sending handshake...");
+        console.log("👀 Check your TV screen for a pairing prompt!");
+        ws.send(JSON.stringify(getHandshakePayload(existingKey)));
       });
 
-      tvInstance.on("connect", () => {
-        clearTimeout(timeout);
-        cleanup();
-        if (prompted) {
-          resolve(`TV paired successfully! Key saved to: ${KEY_FILE_PATH}`);
-        } else {
-          resolve(
-            `TV connected (key already existed). Key file: ${KEY_FILE_PATH}`
-          );
+      ws.on("message", (data: RawData) => {
+        try {
+          const msg = JSON.parse(data.toString());
+
+          if (msg.type === "registered") {
+            clearTimeout(timeoutId);
+            const clientKey = msg.payload?.["client-key"];
+
+            if (clientKey) {
+              fs.writeFileSync(KEY_FILE_PATH, clientKey);
+              console.log("✓ Pairing successful!");
+              ws.close();
+              resolve(`TV paired successfully! Key saved to: ${KEY_FILE_PATH}`);
+            } else {
+              ws.close();
+              resolve(`TV connected (using existing key). Key file: ${KEY_FILE_PATH}`);
+            }
+          } else if (msg.type === "error") {
+            clearTimeout(timeoutId);
+            ws.close();
+            reject(new Error(`TV error: ${msg.error || "Unknown error"}`));
+          }
+        } catch (e) {
+          console.log("Raw message:", data.toString().substring(0, 200));
         }
       });
 
-      tvInstance.on("error", (error: Error) => {
-        clearTimeout(timeout);
-        console.error("Setup error:", error);
-        cleanup();
-        reject(error);
+      ws.on("error", (err: Error) => {
+        clearTimeout(timeoutId);
+        console.error("Setup error:", err);
+        reject(err);
       });
 
-      tvInstance.on("close", () => {
-        clearTimeout(timeout);
-        cleanup();
-        reject(new Error("Connection closed during setup"));
+      ws.on("close", () => {
+        clearTimeout(timeoutId);
       });
     });
   } catch (error) {

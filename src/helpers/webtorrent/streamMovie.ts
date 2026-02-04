@@ -19,6 +19,26 @@ import {
 import { SupportedLanguage } from "../subs/opensubtitles";
 import { parseSearchQuery } from "./parseSearchQuery";
 
+// Handle UTP connection errors globally - these are normal in P2P networking
+// and shouldn't crash the app
+let utpErrorHandlerRegistered = false;
+const registerUtpErrorHandler = () => {
+  if (utpErrorHandlerRegistered) return;
+  utpErrorHandlerRegistered = true;
+  
+  process.on("uncaughtException", (err: Error) => {
+    // UTP connection resets are normal in P2P - peers disconnect unexpectedly
+    if (err.message?.includes("UTP_ECONNRESET") || 
+        err.name === "UTP_ECONNRESET" ||
+        (err as any).code === "UTP_ECONNRESET") {
+      console.log("UTP connection reset (peer disconnected) - ignoring");
+      return;
+    }
+    // Re-throw other uncaught exceptions
+    throw err;
+  });
+};
+
 // Helper to increment episode in a search query
 const incrementEpisode = (title: string): string | null => {
   const { episode, season } = parseSearchQuery(title);
@@ -142,7 +162,11 @@ let activeServer: {
   cleanup: () => void;
   processId: string;
   caffeinateProcess?: ChildProcess;
+  magnetLink: string;
 } | null = null;
+
+// Track magnet links currently being initialized (to prevent duplicate starts)
+const pendingMagnetLinks = new Set<string>();
 
 // Start caffeinate to prevent sleep during streaming (macOS)
 const startCaffeinate = (): ChildProcess | undefined => {
@@ -568,6 +592,22 @@ export const streamMovie = async ({
   onStreamReady?: (streamUrl: string) => void;
   onStartNextEpisode?: (nextTitle: string) => void;
 }) => {
+  // Register global UTP error handler (only once)
+  registerUtpErrorHandler();
+
+  // Prevent duplicate torrent starts
+  if (pendingMagnetLinks.has(magnetLinkUrl)) {
+    console.log("Torrent already being initialized, skipping duplicate:", magnetLinkUrl.substring(0, 60));
+    return;
+  }
+  if (activeServer?.magnetLink === magnetLinkUrl) {
+    console.log("Torrent already active, skipping duplicate:", magnetLinkUrl.substring(0, 60));
+    return;
+  }
+
+  // Mark as pending
+  pendingMagnetLinks.add(magnetLinkUrl);
+
   // Kill previous stream if exists
   if (activeServer) {
     console.log("Killing previous stream and WebTorrent client...");
@@ -616,11 +656,25 @@ export const streamMovie = async ({
           deselect: true,
         },
         async (torrent: any) => {
+          // Torrent added successfully, remove from pending
+          pendingMagnetLinks.delete(magnetLinkUrl);
           console.log(`Starting stream: ${torrent.name}`);
 
           // Add error handler for torrent
           torrent.on("error", (err: Error) => {
             console.error("Torrent error:", err);
+          });
+
+          // Handle wire-level errors (peer connection errors including UTP resets)
+          torrent.on("wire", (wire: any) => {
+            wire.on("error", (err: Error) => {
+              // UTP connection resets are normal - peers disconnect
+              if (err.message?.includes("UTP_ECONNRESET") ||
+                  err.message?.includes("ECONNRESET")) {
+                return; // Silently ignore
+              }
+              console.log("Wire error:", err.message);
+            });
           });
 
           // Use AI to select the right files based on search query (prioritize for streaming)
@@ -1120,7 +1174,7 @@ export const streamMovie = async ({
           };
 
           // Store active server for future cleanup
-          activeServer = { server, client, cleanup, processId, caffeinateProcess };
+          activeServer = { server, client, cleanup, processId, caffeinateProcess, magnetLink: magnetLinkUrl };
 
           // Cleanup on process exit
           process.on("exit", cleanup);
@@ -1173,6 +1227,7 @@ export const streamMovie = async ({
       );
     })
     .catch((error) => {
+      pendingMagnetLinks.delete(magnetLinkUrl);
       console.error("Error loading webtorrent:", error);
     });
 };
