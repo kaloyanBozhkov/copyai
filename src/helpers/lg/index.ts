@@ -159,7 +159,7 @@ export const turnOffTVScreen = async (): Promise<string> => {
   try {
     await connectAndExecute(async (tv) => {
       return new Promise((resolve, reject) => {
-        tv.request("ssap://system/setScreenOff", (err: Error, res: any) => {
+        tv.request("ssap://com.webos.service.tvpower/power/turnOffScreen", (err: Error, res: any) => {
           if (err) reject(err);
           else resolve(res);
         });
@@ -178,7 +178,7 @@ export const turnOnTVScreen = async (): Promise<string> => {
   try {
     await connectAndExecute(async (tv) => {
       return new Promise((resolve, reject) => {
-        tv.request("ssap://system/setScreenOn", (err: Error, res: any) => {
+        tv.request("ssap://com.webos.service.tvpower/power/turnOnScreen", (err: Error, res: any) => {
           if (err) reject(err);
           else resolve(res);
         });
@@ -442,7 +442,7 @@ const getHandshakePayload = (existingKey: string | null) => ({
         "LAUNCH", "LAUNCH_WEBAPP", "APP_TO_APP", "CLOSE", "TEST_OPEN", "TEST_PROTECTED",
         "CONTROL_AUDIO", "CONTROL_DISPLAY", "CONTROL_INPUT_JOYSTICK",
         "CONTROL_INPUT_MEDIA_RECORDING", "CONTROL_INPUT_MEDIA_PLAYBACK",
-        "CONTROL_INPUT_TV", "CONTROL_POWER", "READ_APP_STATUS", "READ_CURRENT_CHANNEL",
+        "CONTROL_INPUT_TV", "CONTROL_POWER", "CONTROL_TV_SCREEN", "READ_APP_STATUS", "READ_CURRENT_CHANNEL",
         "READ_INPUT_DEVICE_LIST", "READ_NETWORK_STATE", "READ_RUNNING_APPS",
         "READ_TV_CHANNEL_LIST", "WRITE_NOTIFICATION_TOAST", "READ_POWER_STATE",
         "READ_COUNTRY_INFO",
