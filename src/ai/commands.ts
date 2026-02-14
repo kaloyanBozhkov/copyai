@@ -7,6 +7,7 @@ export const getMovieSystemMessage = async (items: string) => {
 - You must return the item index in the list.
 - User will provide the search query
 - If the user search query includes a year or a resolution flag like 4k, 1080p, 720p, 480p, etc. you must choose the torrent that matches the year and/or resolution.
+- Make sure the language is the original language of the movie or series unless the user specifies a different language.
 </instructions>
 
 <result_items>${items}</result_items>
