@@ -3,6 +3,7 @@ import { join } from "path";
 import { autoLauncher, getAutoLaunchEnabled } from "./autoLaunch";
 import { showInputWindowListener } from "./controllers";
 import { showCommandBrowser } from "../views/commandBrowser";
+import { showWizControl } from "../views/wizControl";
 import { log } from "./logError";
 import type { DownloadProcess } from "../helpers/webtorrent/downloadMovie";
 import type { StreamProcess } from "../helpers/webtorrent/streamMovie";
@@ -93,6 +94,10 @@ const updateTrayMenu = () => {
     {
       label: "Command Grimoire",
       click: () => showCommandBrowser(isDevMode),
+    },
+    {
+      label: "Wiz Lights",
+      click: () => showWizControl(),
     },
   ];
 
