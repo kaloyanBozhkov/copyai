@@ -11,6 +11,7 @@ import {
   getCustomSpellsAsExecutors,
   onCustomSpellsChange,
 } from "./customSpells";
+import { onSettingsChange } from "./grimoireSettings";
 
 export { clearHistory };
 
@@ -25,6 +26,7 @@ const getUtensils = () => ({
 // Subscribe to custom template/spell changes to refresh keys
 onCustomTemplatesChange(() => refreshCommandKeys());
 onCustomSpellsChange(() => refreshCommandKeys());
+onSettingsChange(() => refreshCommandKeys());
 
 // Filter out non-executable keys (subcategories)
 const isExecutable = (key: string): boolean => {

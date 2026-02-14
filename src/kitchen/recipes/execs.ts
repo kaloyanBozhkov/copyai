@@ -1103,7 +1103,10 @@ setupWizGroupCommands();
 
 // Re-inject room commands when settings change (e.g. user saves groups in Wiz Setup UI)
 import { onSettingsChange } from "../grimoireSettings";
-onSettingsChange(() => setupWizGroupCommands());
+onSettingsChange(() => {
+  setupWizGroupCommands();
+  refreshExecs();
+});
 
 // Remove development commands in production
 if (process.env.NODE_ENV !== "development") {
@@ -1196,7 +1199,11 @@ const setupEmailComposeCommands = () => {
 };
 setupEmailComposeCommands();
 
-export const execs = flattenObjectDot(execsPerCategory);
+export let execs = flattenObjectDot(execsPerCategory);
+
+export const refreshExecs = () => {
+  execs = flattenObjectDot(execsPerCategory);
+};
 
 // Descriptions for commands (key matches fullKey like "lights.off" or "ai.translate")
 export const execDescriptions: Record<string, string> = {
