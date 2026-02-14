@@ -25,11 +25,11 @@ module.exports = {
     {
       name: '@electron-forge/maker-dmg',
       platforms: ['darwin'],
-      config: {
+      config: (arch) => ({
         icon: './src/assets/copyai-logo.icns',
         format: 'ULFO',
         contents: [
-          { x: 130, y: 150, type: 'file', path: process.cwd() + '/out/copyai-darwin-arm64/copyai.app' },
+          { x: 130, y: 150, type: 'file', path: `${process.cwd()}/out/copyai-darwin-${arch}/copyai.app` },
           { x: 410, y: 150, type: 'link', path: '/Applications' }
         ],
         additionalDMGOptions: {
@@ -37,7 +37,7 @@ module.exports = {
             size: { width: 540, height: 340 }
           }
         }
-      },
+      }),
     },
     {
       name: '@electron-forge/maker-zip',
