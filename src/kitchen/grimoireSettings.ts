@@ -138,6 +138,14 @@ export const updateSettings = (
   return updated;
 };
 
+/** Apply non-empty grimoire apiKeys to process.env (overrides existing) */
+export const applyApiKeysToEnv = (): void => {
+  const { apiKeys } = loadSettings();
+  for (const [key, value] of Object.entries(apiKeys)) {
+    if (value) process.env[key] = value;
+  }
+};
+
 // API Key management
 export const getApiKey = (key: string): string => {
   return loadSettings().apiKeys[key] || "";

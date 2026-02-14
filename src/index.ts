@@ -1,6 +1,13 @@
+// defaults to not crash app
 import "./env";
 import { join } from "path";
+
+// load .env 
 import * as dotenv from "dotenv";
-dotenv.config({ path: join(__dirname, "..", ".env") });
+dotenv.config({ path: join(__dirname, "..", ".env"), override: true });
+
+// load custom keys added via grimoire and override .env
+import { applyApiKeysToEnv } from "./kitchen/grimoireSettings";
+applyApiKeysToEnv();
 
 import "./app";

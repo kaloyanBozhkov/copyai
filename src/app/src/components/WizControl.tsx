@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { ipcRenderer } from "@/utils/electron";
-import { X, Minus, Lightbulb, Power } from "lucide-react";
+import { X, Minus, Lightbulb, Power, ChevronDown, ChevronRight } from "lucide-react";
 
 interface WizDeviceInfo {
   ip: string;
@@ -17,6 +17,7 @@ export function WizControl() {
   const [devices, setDevices] = useState<WizDeviceInfo[]>([]);
   const [groups, setGroups] = useState<WizGroup[]>([]);
   const [deviceStates, setDeviceStates] = useState<Record<string, boolean>>({});
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   const fetchStates = useCallback((devs: WizDeviceInfo[]) => {
     if (devs.length > 0) {
@@ -134,44 +135,55 @@ export function WizControl() {
                 >
                   <Power size={16} />
                 </button>
-                <span className="font-fantasy text-sm font-semibold text-grimoire-text">
-                  {group.name}
-                </span>
+                <button
+                  onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.name]: !prev[group.name] }))}
+                  className="flex items-center gap-1.5 hover:text-grimoire-gold transition-colors"
+                >
+                  {expandedGroups[group.name]
+                    ? <ChevronDown size={14} className="text-grimoire-text-dim" />
+                    : <ChevronRight size={14} className="text-grimoire-text-dim" />
+                  }
+                  <span className="font-fantasy text-sm font-semibold text-grimoire-text">
+                    {group.name}
+                  </span>
+                </button>
                 <span className="text-xs text-grimoire-text-dim">
                   {group.deviceIps.length} light(s)
                 </span>
               </div>
 
-              {/* Devices in group */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pl-2">
-                {group.deviceIps.map((ip) => {
-                  const info = getDeviceInfo(ip);
-                  const isOn = deviceStates[ip] ?? false;
-                  return (
-                    <button
-                      key={ip}
-                      onClick={() => handleToggle(ip)}
-                      className={`flex items-center gap-2 p-2.5 rounded border transition-all ${
-                        isOn
-                          ? "bg-grimoire-gold/10 border-grimoire-gold/50 shadow-[0_0_8px_rgba(201,162,39,0.15)]"
-                          : "bg-black/20 border-grimoire-border/50 hover:border-grimoire-border"
-                      }`}
-                    >
-                      <Power
-                        size={14}
-                        className={`shrink-0 transition-colors ${
-                          isOn ? "text-grimoire-gold-bright" : "text-grimoire-text-dim"
+              {/* Devices in group - collapsible */}
+              {expandedGroups[group.name] && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pl-2">
+                  {group.deviceIps.map((ip) => {
+                    const info = getDeviceInfo(ip);
+                    const isOn = deviceStates[ip] ?? false;
+                    return (
+                      <button
+                        key={ip}
+                        onClick={() => handleToggle(ip)}
+                        className={`flex items-center gap-2 p-2.5 rounded border transition-all ${
+                          isOn
+                            ? "bg-grimoire-gold/10 border-grimoire-gold/50 shadow-[0_0_8px_rgba(201,162,39,0.15)]"
+                            : "bg-black/20 border-grimoire-border/50 hover:border-grimoire-border"
                         }`}
-                      />
-                      <div className="flex-1 min-w-0 text-left">
-                        <p className="text-xs font-grimoire text-grimoire-text truncate">
-                          {info?.moduleName || ip}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                      >
+                        <Power
+                          size={14}
+                          className={`shrink-0 transition-colors ${
+                            isOn ? "text-grimoire-gold-bright" : "text-grimoire-text-dim"
+                          }`}
+                        />
+                        <div className="flex-1 min-w-0 text-left">
+                          <p className="text-xs font-grimoire text-grimoire-text truncate">
+                            {info?.moduleName || ip}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
