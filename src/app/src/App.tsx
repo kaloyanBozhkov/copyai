@@ -5,6 +5,7 @@ import { useRouteStore } from "./store/useRouteStore";
 import { Thinking } from "./components/Thinking";
 import { CommandGrimoire } from "./components/grimoire";
 import { WatchHistory } from "./components/WatchHistory";
+import { WizSetup } from "./components/WizSetup";
 
 export default function App() {
   useInit();
@@ -15,7 +16,7 @@ export default function App() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const urlRoute = urlParams.get("route");
-    if (urlRoute === "grimoire" || urlRoute === "watch-history") {
+    if (urlRoute === "grimoire" || urlRoute === "watch-history" || urlRoute === "wiz-setup") {
       setFullscreenRoute(urlRoute);
       setRoute(urlRoute);
     }
@@ -28,6 +29,10 @@ export default function App() {
 
   if (fullscreenRoute === "watch-history" || route === "watch-history") {
     return <WatchHistory />;
+  }
+
+  if (fullscreenRoute === "wiz-setup" || route === "wiz-setup") {
+    return <WizSetup />;
   }
 
   return (

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import lgtv from "lgtv2";
 import WebSocket, { RawData } from "ws";
 import path from "path";
@@ -74,7 +75,7 @@ const connectAndExecute = <T>(
       if (tvInstance) {
         try {
           tvInstance.disconnect();
-        } catch (e) {
+        } catch {
           // Ignore disconnect errors
         }
       }
@@ -520,7 +521,7 @@ export const setupTV = async (force: boolean = false): Promise<string> => {
             ws.close();
             reject(new Error(`TV error: ${msg.error || "Unknown error"}`));
           }
-        } catch (e) {
+        } catch {
           console.log("Raw message:", data.toString().substring(0, 200));
         }
       });

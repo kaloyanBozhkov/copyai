@@ -57,10 +57,23 @@ export interface AlchemyPotion {
   lastFetched?: number;
 }
 
+export interface WizDeviceInfo {
+  ip: string;
+  roomId?: number;
+  moduleName?: string;
+}
+
+export interface WizGroup {
+  name: string;
+  deviceIps: string[];
+}
+
 export interface GrimoireSettings {
   apiKeys: Record<string, string>;
   book: Record<string, string>;
   alchemy: AlchemyPotion[];
   localDomain?: string;
+  wizDevices?: WizDeviceInfo[];
+  wizGroups?: WizGroup[];
 }
 

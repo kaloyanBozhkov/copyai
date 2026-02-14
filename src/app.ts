@@ -6,12 +6,16 @@ import { log } from "./electron/logError";
 import { setupSPAListeners } from "./electron/spaListeners";
 import { downloadProcessUI } from "./helpers/webtorrent/downloadMovie";
 import { streamProcessUI } from "./helpers/webtorrent/streamMovie";
+import { startMCPServer, stopMCPServer } from "./mcp/server";
+import { ensureSettingsFileExists } from "./kitchen/grimoireSettings";
 
 log("App module loaded");
 
 app.whenReady().then(async () => {
   const isDevMode = !app.isPackaged;
   log(`App ready, isDevMode: ${isDevMode}, isPackaged: ${app.isPackaged}`);
+
+  ensureSettingsFileExists();
 
   // Register process types for tray
   registerProcessType("download", downloadProcessUI);
@@ -24,6 +28,9 @@ app.whenReady().then(async () => {
   await setupTray(isDevMode);
   setupShortcuts(isDevMode);
   setupSPAListeners(isDevMode);
+  
+  // Start MCP server for external command access
+  await startMCPServer();
 });
 
 // Prevent app from quitting when all windows are closed
@@ -32,7 +39,8 @@ app.on("window-all-closed", () => {
 });
 
 // Clean up on quit
-app.on("will-quit", () => {
+app.on("will-quit", async () => {
+  await stopMCPServer();
   destroyTray();
 });
 

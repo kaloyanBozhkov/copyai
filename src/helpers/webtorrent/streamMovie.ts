@@ -1,4 +1,4 @@
-import { exec, spawn, ChildProcess } from "child_process";
+import { spawn, ChildProcess } from "child_process";
 import path from "path";
 import http from "http";
 import { v4 as uuidv4 } from "uuid";
@@ -30,7 +30,7 @@ const registerUtpErrorHandler = () => {
     // UTP connection resets are normal in P2P - peers disconnect unexpectedly
     if (err.message?.includes("UTP_ECONNRESET") || 
         err.name === "UTP_ECONNRESET" ||
-        (err as any).code === "UTP_ECONNRESET") {
+        (err as NodeJS.ErrnoException).code === "UTP_ECONNRESET") {
       console.log("UTP connection reset (peer disconnected) - ignoring");
       return;
     }
@@ -41,7 +41,7 @@ const registerUtpErrorHandler = () => {
 
 // Helper to increment episode in a search query
 const incrementEpisode = (title: string): string | null => {
-  const { episode, season } = parseSearchQuery(title);
+  const { episode } = parseSearchQuery(title);
   
   if (episode === null) {
     return null; // No episode to increment
@@ -158,7 +158,7 @@ export const streamProcessUI = {
 // Track active stream server to kill previous ones
 let activeServer: {
   server: http.Server;
-  client: any;
+  client: { destroyed?: boolean; destroy: () => void };
   cleanup: () => void;
   processId: string;
   caffeinateProcess?: ChildProcess;
@@ -638,7 +638,8 @@ export const streamMovie = async ({
 
   const processId = uuidv4();
   // Dynamic import for ESM module (using eval to prevent TS from compiling to require)
-  (eval('import("webtorrent")') as Promise<any>)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (eval('import("webtorrent")') as Promise<{ default: any }>)
     .then((WebTorrentModule) => {
       const WebTorrent = WebTorrentModule.default;
       const client = new WebTorrent();
@@ -655,6 +656,7 @@ export const streamMovie = async ({
           // do not select any files to download first
           deselect: true,
         },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         async (torrent: any) => {
           // Torrent added successfully, remove from pending
           pendingMagnetLinks.delete(magnetLinkUrl);
@@ -666,6 +668,7 @@ export const streamMovie = async ({
           });
 
           // Handle wire-level errors (peer connection errors including UTP resets)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           torrent.on("wire", (wire: any) => {
             wire.on("error", (err: Error) => {
               // UTP connection resets are normal - peers disconnect
@@ -702,6 +705,7 @@ export const streamMovie = async ({
           let idleCheckInterval: NodeJS.Timeout | null = null;
           let progressInterval: NodeJS.Timeout | null = null;
           let subtitlesFetched = false;
+          // eslint-disable-next-line prefer-const
           let server: http.Server;
 
           // Fetch subtitles from OpenSubtitles (once per stream)
@@ -1037,10 +1041,7 @@ export const streamMovie = async ({
                 }
               }
 
-              // No valid range request, send full file or initial chunk
-              // Some TV browsers need initial range even if not requested
-              const initialChunkSize = Math.min(1024 * 1024, movieFile.length); // 1MB or file size
-
+              // No valid range request, send full file
               res.setHeader("Content-Length", movieFile.length);
               res.setHeader(
                 "Content-Range",

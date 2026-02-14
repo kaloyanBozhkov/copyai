@@ -18,11 +18,24 @@ export interface AlchemyPotion {
   lastFetched?: number;
 }
 
+export interface WizDeviceInfo {
+  ip: string;
+  roomId?: number;
+  moduleName?: string;
+}
+
+export interface WizGroup {
+  name: string;
+  deviceIps: string[];
+}
+
 export interface GrimoireSettings {
-  apiKeys: Record<string, string>; // Dynamic API keys (e.g., OPENAI_API_KEY, OPENROUTER_API_KEY, custom keys)
-  book: Record<string, string>; // Custom dictionary fields
-  alchemy: AlchemyPotion[]; // Dynamic API-fetched values
-  localDomain?: string; // Custom local domain (e.g., "koko-mac.lan") for network streaming
+  apiKeys: Record<string, string>;
+  book: Record<string, string>;
+  alchemy: AlchemyPotion[];
+  localDomain?: string;
+  wizDevices?: WizDeviceInfo[];
+  wizGroups?: WizGroup[];
 }
 
 const DEFAULT_SETTINGS: GrimoireSettings = {
@@ -32,6 +45,8 @@ const DEFAULT_SETTINGS: GrimoireSettings = {
   },
   book: {},
   alchemy: [],
+  wizDevices: [],
+  wizGroups: [],
 };
 
 let settingsCache: GrimoireSettings | null = null;
@@ -58,11 +73,13 @@ const loadSettings = (): GrimoireSettings => {
     if (fs.existsSync(SETTINGS_FILE)) {
       const data = fs.readFileSync(SETTINGS_FILE, "utf-8");
       const parsed = JSON.parse(data);
-      const loaded: GrimoireSettings = { 
-        ...DEFAULT_SETTINGS, 
+      const loaded: GrimoireSettings = {
+        ...DEFAULT_SETTINGS,
         ...parsed,
         apiKeys: { ...DEFAULT_SETTINGS.apiKeys, ...parsed?.apiKeys },
         alchemy: parsed?.alchemy || [],
+        wizDevices: parsed?.wizDevices || [],
+        wizGroups: parsed?.wizGroups || [],
       };
       settingsCache = loaded;
       return loaded;
@@ -73,8 +90,22 @@ const loadSettings = (): GrimoireSettings => {
 
   const defaults = { ...DEFAULT_SETTINGS };
   settingsCache = defaults;
+  ensureSettingsFileExists();
   return defaults;
 };
+
+export function ensureSettingsFileExists(): void {
+  try {
+    const dir = path.dirname(SETTINGS_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    if (!fs.existsSync(SETTINGS_FILE)) {
+      const initial = { ...DEFAULT_SETTINGS };
+      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(initial, null, 2), "utf-8");
+    }
+  } catch (error) {
+    console.error("Failed to ensure grimoire settings file:", error);
+  }
+}
 
 const saveSettings = (settings: GrimoireSettings): void => {
   try {
@@ -100,6 +131,8 @@ export const updateSettings = (
     apiKeys: { ...current.apiKeys, ...updates.apiKeys },
     book: updates.book !== undefined ? updates.book : current.book,
     alchemy: updates.alchemy !== undefined ? updates.alchemy : current.alchemy,
+    wizDevices: updates.wizDevices !== undefined ? updates.wizDevices : current.wizDevices,
+    wizGroups: updates.wizGroups !== undefined ? updates.wizGroups : current.wizGroups,
   };
   saveSettings(updated);
   return updated;
@@ -140,6 +173,26 @@ export const setBookField = (field: string, value: string): void => {
 export const removeBookField = (field: string): void => {
   const current = loadSettings();
   delete current.book[field];
+  saveSettings(current);
+};
+
+export const getWizDevices = (): WizDeviceInfo[] => {
+  return loadSettings().wizDevices ?? [];
+};
+
+export const setWizDevices = (devices: WizDeviceInfo[]): void => {
+  const current = loadSettings();
+  current.wizDevices = devices;
+  saveSettings(current);
+};
+
+export const getWizGroups = (): WizGroup[] => {
+  return loadSettings().wizGroups ?? [];
+};
+
+export const setWizGroups = (groups: WizGroup[]): void => {
+  const current = loadSettings();
+  current.wizGroups = groups;
   saveSettings(current);
 };
 

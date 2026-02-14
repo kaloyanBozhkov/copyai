@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 declare module "lgtv2" {
   interface LGTVConfig {
     url: string;

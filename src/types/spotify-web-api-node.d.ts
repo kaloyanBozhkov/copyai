@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 declare module "spotify-web-api-node" {
   export default class SpotifyWebApi {
     constructor(options?: {

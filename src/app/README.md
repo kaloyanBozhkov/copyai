@@ -390,6 +390,9 @@ Each potion configuration includes:
 - Search/filter potions
 - Shows `${alchemy.potion}` syntax for each entry
 
+**Where to store API keys (new machine / crash due to missing env):**  
+Settings (including `apiKeys`) are stored in **`~/.copyai-grimoire-settings.json`**. On a new PC either: create that file with at least `{"apiKeys": {"OPENAI_API_KEY": "sk-...", "OPENROUTER_API_KEY": "sk-or-..."}}`, or open the app → **Command Grimoire** → **Settings** and add the keys there (they are saved to the same file).
+
 **Storage Format:**
 ```json
 {

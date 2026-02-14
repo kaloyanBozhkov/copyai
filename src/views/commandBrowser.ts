@@ -32,6 +32,7 @@ import {
   getPotion,
   executePotion,
   getAlchemyPlaceholders,
+  onSettingsChange,
   GrimoireSettings,
 } from "../kitchen/grimoireSettings";
 import { setupConsoleForwarding, stopConsoleForwarding, enableLogForwarding, disableLogForwarding } from "../electron/consoleForwarder";
@@ -148,6 +149,7 @@ const extractTemplateArgs = (recipe: string[]): string[] => {
 
 // Window management
 let browserWindow: BrowserWindow | null = null;
+let unsubSettingsChange: (() => void) | null = null;
 
 export const showCommandBrowser = async (isDevMode = false): Promise<void> => {
   // If window exists and is valid, focus it
@@ -192,6 +194,13 @@ export const showCommandBrowser = async (isDevMode = false): Promise<void> => {
   // Setup console forwarding to renderer
   setupConsoleForwarding(browserWindow);
 
+  // Push updated commands to renderer when settings change (e.g. wiz groups saved)
+  unsubSettingsChange = onSettingsChange(() => {
+    if (browserWindow && !browserWindow.isDestroyed()) {
+      browserWindow.webContents.send("grimoire-commands-data", getCommandsData());
+    }
+  });
+
   // Set up grimoire-mounted handler (for hot reloads too)
   ipcMain.removeAllListeners("grimoire-mounted");
   ipcMain.on("grimoire-mounted", () => {
@@ -217,6 +226,10 @@ export const showCommandBrowser = async (isDevMode = false): Promise<void> => {
       ipcMain.removeAllListeners("grimoire-mounted");
       cleanupCommandBrowserIPC();
       stopConsoleForwarding();
+      if (unsubSettingsChange) {
+        unsubSettingsChange();
+        unsubSettingsChange = null;
+      }
     });
   });
 };

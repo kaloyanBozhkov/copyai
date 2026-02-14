@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import SpotifyWebApi from "spotify-web-api-node";
 import playlists from "../lg/spotify.json";
 

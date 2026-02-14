@@ -14,6 +14,8 @@ import {
   listRooms,
   parseBrightnessAndColor,
 } from "../../helpers/wiz";
+import { getWizGroups } from "../grimoireSettings";
+import { showWizSetup } from "../../views/wizSetup";
 import {
   turnOnTV,
   turnOffTV,
@@ -926,14 +928,7 @@ export const execsPerCategory: Record<
       "brightness?: number (0-100), color?: string | scene (default: 50 default)",
     ],
 
-    // Room subcategories
-    "living-room": createRoomCommands("living room"),
-    bedroom: createRoomCommands("bedroom"),
-    office: createRoomCommands("office"),
-    kitchen: createRoomCommands("kitchen"),
-    hallway: createRoomCommands("hallway"),
-    balcony: createRoomCommands("balcony"),
-    list_rooms: [async () => listRooms()],
+    // Room subcategories are injected dynamically below via setupWizGroupCommands()
 
     // TV subcategory
     tv: {
@@ -1031,6 +1026,7 @@ export const execsPerCategory: Record<
 
           const room =
             args.length > 1 ? args.slice(0, -1).join(" ") : undefined;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           return setACMode(room, lastArg as any);
         },
         "room?: string, mode: cool | heat | auto | dry | fan",
@@ -1075,8 +1071,39 @@ export const execsPerCategory: Record<
       ],
     },
   },
+  wiz: {
+    list_rooms: [async () => listRooms()],
+    setup: [() => { showWizSetup(); return "Opening Wiz Setup..."; }],
+  },
   development: {},
 };
+
+// Inject room subcategories into home from wizGroups config
+const setupWizGroupCommands = () => {
+  const groups = getWizGroups();
+  const home = execsPerCategory.home;
+  // Remove stale dynamic group keys (keep known static keys)
+  const staticKeys = new Set([
+    "lights_off", "lights_on", "lights_to",
+    "tv", "aircon",
+  ]);
+  for (const key of Object.keys(home)) {
+    if (!staticKeys.has(key) && typeof home[key] === "object" && !Array.isArray(home[key])) {
+      // Check if it looks like a room command set (has on/off/to)
+      const sub = home[key] as Record<string, unknown>;
+      if (sub.on && sub.off && sub.to) delete home[key];
+    }
+  }
+  for (const group of groups) {
+    const key = group.name.toLowerCase().replace(/\s+/g, "-");
+    home[key] = createRoomCommands(group.name);
+  }
+};
+setupWizGroupCommands();
+
+// Re-inject room commands when settings change (e.g. user saves groups in Wiz Setup UI)
+import { onSettingsChange } from "../grimoireSettings";
+onSettingsChange(() => setupWizGroupCommands());
 
 // Remove development commands in production
 if (process.env.NODE_ENV !== "development") {

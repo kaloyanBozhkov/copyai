@@ -8,6 +8,7 @@ import { retry } from "@koko420/shared";
 import { getLLMResponse } from "@koko420/ai-tools";
 import z from "zod";
 import { parseSearchQuery } from "../webtorrent/parseSearchQuery";
+import { HTMLElement } from "node-html-parser";
 
 const OPENSUBTITLES_BASE_URL = "https://www.opensubtitles.org";
 
@@ -142,7 +143,7 @@ export const downloadAndExtractSubtitle = async (
       const response = await fetch(url);
       const blob = await response.blob();
       return new Promise<string>((resolve) => {
-        // @ts-ignore - FileReader available in browser context
+        // @ts-expect-error - FileReader available in browser context
         const reader = new FileReader();
         reader.onloadend = () =>
           resolve((reader.result as string).split(",")[1]);
@@ -316,12 +317,12 @@ export const scrapeEpisodeResults = async (
 
     // Step 2: Check if "All subtitles for this TV Series" link exists
     const tvSeriesLink = await page.evaluate(() => {
-      // @ts-ignore - document is available in browser context
+      // @ts-expect-error - document is available in browser context
       const links = Array.from(document.querySelectorAll("a"));
       const tvLink = links.find((a) =>
-        (a as any).textContent?.includes("All subtitles for this TV Series")
+        (a as HTMLElement).textContent?.includes("All subtitles for this TV Series")
       );
-      return tvLink ? (tvLink as any).getAttribute("href") : null;
+      return tvLink ? (tvLink as HTMLElement).getAttribute("href") : null;
     });
 
     // If no TV series link found, it's a movie
@@ -568,7 +569,7 @@ const parseAnimeSearchQuery = (
   const parsed = parseSearchQuery(searchQuery, true);
 
   let title = parsed.title;
-  let season = parsed.season ?? 1; // Default season to 1
+  const season = parsed.season ?? 1; // Default season to 1
   let episode = parsed.episode;
 
   // Second pass: if no episode found, check if title ends with digits

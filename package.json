@@ -17,8 +17,7 @@
     "test:watch": "vitest",
     "package": "npm run build:all && electron-forge package",
     "make": "npm run build:all && electron-forge make",
-    "make:intel": "npm run build:all && electron-forge make --arch=x64",
-    "make:universal": "npm run build:all && electron-forge make --arch=universal"
+    "make:intel": "npm run build:all && electron-forge make --arch=x64"
   },
   "keywords": [],
   "author": "",

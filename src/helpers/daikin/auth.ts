@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import axios from "axios";
 import fs from "fs";
 import path from "path";
@@ -20,7 +21,7 @@ export const loadTokens = (): TokenData | null => {
     if (!fs.existsSync(TOKEN_FILE)) return null;
     const data = JSON.parse(fs.readFileSync(TOKEN_FILE, "utf8"));
     return data;
-  } catch (error) {
+  } catch {
     return null;
   }
 };

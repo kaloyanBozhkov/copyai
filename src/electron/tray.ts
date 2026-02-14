@@ -31,7 +31,7 @@ export const registerProcessType = <T extends ActiveProcess>(
   processTypeRegistry[type] = handler as ProcessTypeHandler;
 };
 
-let activeProcesses: Map<string, ActiveProcess> = new Map();
+const activeProcesses: Map<string, ActiveProcess> = new Map();
 
 const updateTrayMenu = () => {
   if (!tray) return;
@@ -85,7 +85,7 @@ const updateTrayMenu = () => {
     };
   }).filter(Boolean);
 
-  const menuTemplate: any[] = [
+  const menuTemplate: Electron.MenuItemConstructorOptions[] = [
     {
       label: "Open CopyAI",
       click: () => showInputWindowListener(isDevMode),
@@ -98,7 +98,7 @@ const updateTrayMenu = () => {
 
   if (processMenuItems.length > 0) {
     menuTemplate.push({ type: "separator" });
-    menuTemplate.push(...processMenuItems);
+    menuTemplate.push(...processMenuItems.filter(Boolean) as Electron.MenuItemConstructorOptions[]);
   }
 
   menuTemplate.push(
@@ -107,7 +107,7 @@ const updateTrayMenu = () => {
       label: "Launch at Login",
       type: "checkbox",
       checked: isAutoLaunchEnabled,
-      click: (menuItem: any) => {
+      click: (menuItem: Electron.MenuItem) => {
         try {
           if (menuItem.checked) {
             autoLauncher.enable();
@@ -192,8 +192,8 @@ export const updateActiveProcess = (
     Object.assign(process, updates);
     console.log(`Updated process ${id}:`, {
       progress: (process.progress * 100).toFixed(1) + "%",
-      downloadSpeed: ((process as any).downloadSpeed / 1024 / 1024).toFixed(2) + " MB/s",
-      peers: (process as any).peers,
+      downloadSpeed: (((process as ActiveProcess & { downloadSpeed?: number }).downloadSpeed ?? 0) / 1024 / 1024).toFixed(2) + " MB/s",
+      peers: (process as ActiveProcess & { peers?: number }).peers,
     });
     // Menu will be updated by the interval
   }

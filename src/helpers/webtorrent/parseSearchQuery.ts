@@ -24,7 +24,7 @@ export const parseSearchQuery = (query: string, isAnimeSearch = false): ParsedSe
   }
 
   // Remove season/episode patterns to get clean title (up to 4 digits)
-  let title = lower
+  const title = lower
     .replace(/\s*(?:s|season\s*)\d{1,4}/gi, "")
     .replace(/\s*(?:e|ep|episode\s*)\d{1,4}/gi, "")
     .trim();

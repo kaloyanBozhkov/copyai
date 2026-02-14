@@ -8,7 +8,7 @@ export const getLocalIP = () => {
     if (settings.localDomain && settings.localDomain.trim()) {
       return settings.localDomain.trim();
     }
-  } catch (error) {
+  } catch {
     // Settings not available, continue with default logic
   }
 

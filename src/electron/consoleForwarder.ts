@@ -17,27 +17,32 @@ export const setupConsoleForwarding = (window: BrowserWindow) => {
   if (isInstalled) return;
   isInstalled = true;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   console.log = (...args: any[]) => {
     originalConsole.log(...args);
     if (isForwardingEnabled) forwardLog("log", args);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   console.warn = (...args: any[]) => {
     originalConsole.warn(...args);
     if (isForwardingEnabled) forwardLog("warn", args);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   console.error = (...args: any[]) => {
     originalConsole.error(...args);
     if (isForwardingEnabled) forwardLog("error", args);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   console.info = (...args: any[]) => {
     originalConsole.info(...args);
     if (isForwardingEnabled) forwardLog("info", args);
   };
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const forwardLog = (type: "log" | "warn" | "error" | "info", args: any[]) => {
   if (!targetWindow || targetWindow.isDestroyed()) return;
 

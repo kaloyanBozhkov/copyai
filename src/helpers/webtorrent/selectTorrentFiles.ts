@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-expressions */
 import { getLLMResponse } from "@koko420/ai-tools";
 import { retry } from "@koko420/shared";
 import z from "zod";

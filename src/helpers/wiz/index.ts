@@ -1,23 +1,13 @@
 import dgram from "dgram";
+import { getWizGroups } from "../../kitchen/grimoireSettings";
 
 const WIZ_PORT = 38899;
 const BROADCAST_ADDR = "255.255.255.255";
 const DISCOVERY_TIMEOUT = 2000;
 
-// Map your Wiz roomId to human-readable names
-const ROOM_CONFIG: Record<string, string> = {
-  "32496282": "office", // 1
-  "26395375": "living room", // 4
-  "26395705": "kitchen", // 3
-  "26395373": "bedroom", // 1
-  "32496092": "hallway", // 3,
-  "26395374": "balcony", // 1
-};
-
-interface WizDevice {
+export interface WizDevice {
   ip: string;
   roomId?: number;
-  roomName?: string;
   moduleName?: string;
 }
 
@@ -61,31 +51,63 @@ export const setAllLightsState = async (state: boolean): Promise<string> => {
   }
 };
 
-export const listRooms = async (): Promise<string> => {
-  const devices = await discoverLights();
-  if (devices.length === 0) return "No Wiz devices found";
-
-  const roomMap = new Map<
-    string,
-    { count: number; ips: string[]; name?: string }
-  >();
-  for (const d of devices) {
-    const id = d.roomId?.toString() ?? "unknown";
-    const existing = roomMap.get(id) ?? { count: 0, ips: [], name: d.roomName };
-    existing.count++;
-    existing.ips.push(d.ip);
-    roomMap.set(id, existing);
+export const setDeviceState = async (ip: string, state: boolean): Promise<void> => {
+  const client = await createBroadcastClient();
+  const message = Buffer.from(
+    JSON.stringify({ method: "setPilot", params: { state } })
+  );
+  try {
+    await sendUdp(client, message, WIZ_PORT, ip);
+  } finally {
+    client.close();
   }
+};
 
-  const lines = Array.from(roomMap.entries()).map(([id, { count, name }]) => {
-    const label = name ? `${name} (${id})` : id;
-    return `${label}: ${count} device(s)`;
+export const getDeviceStates = async (ips: string[]): Promise<Record<string, boolean>> => {
+  if (ips.length === 0) return {};
+  const client = await createBroadcastClient();
+  const message = Buffer.from(
+    JSON.stringify({ method: "getPilot", params: {} })
+  );
+  const states: Record<string, boolean> = {};
+
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      client.close();
+      resolve(states);
+    }, DISCOVERY_TIMEOUT);
+
+    client.on("message", (msg, rinfo) => {
+      try {
+        const response = JSON.parse(msg.toString());
+        if (ips.includes(rinfo.address) && response.result) {
+          states[rinfo.address] = response.result.state ?? false;
+        }
+      } catch { /* ignore */ }
+    });
+
+    for (const ip of ips) {
+      sendUdp(client, message, WIZ_PORT, ip).catch(() => {});
+    }
   });
+};
 
+export const listRooms = async (): Promise<string> => {
+  const groups = getWizGroups();
+  if (groups.length === 0) return "No Wiz groups configured. Use wiz.setup to open the setup UI.";
+
+  const lines: string[] = [];
+  for (const group of groups) {
+    lines.push(`${group.name}: ${group.deviceIps.length} device(s)`);
+    for (const ip of group.deviceIps) {
+      lines.push(`  ${ip}`);
+    }
+  }
   return lines.join("\n");
 };
 
 export const discoverLights = (): Promise<WizDevice[]> => {
+  // eslint-disable-next-line no-async-promise-executor
   return new Promise(async (resolve) => {
     const client = await createBroadcastClient();
     const devices: WizDevice[] = [];
@@ -105,68 +127,51 @@ export const discoverLights = (): Promise<WizDevice[]> => {
         devices.push({
           ip: rinfo.address,
           roomId,
-          roomName: roomId ? ROOM_CONFIG[roomId.toString()] : undefined,
           moduleName: response.result?.moduleName,
         });
-      } catch {}
+      } catch { /* ignore parse errors */ }
     });
 
     await sendUdp(client, discoveryMessage, WIZ_PORT, BROADCAST_ADDR);
   });
 };
 
+const sendToDeviceIps = async (
+  ips: string[],
+  params: Record<string, unknown>
+): Promise<number> => {
+  const client = await createBroadcastClient();
+  const message = Buffer.from(
+    JSON.stringify({ method: "setPilot", params })
+  );
+  try {
+    for (const ip of ips) {
+      await sendUdp(client, message, WIZ_PORT, ip);
+    }
+    return ips.length;
+  } finally {
+    client.close();
+  }
+};
+
+const findGroupIps = (groupName: string): string[] | null => {
+  const groups = getWizGroups();
+  const group = groups.find(
+    (g) => g.name.toLowerCase() === groupName.toLowerCase()
+  );
+  return group && group.deviceIps.length > 0 ? group.deviceIps : null;
+};
+
 export const setRoomLightsState = async (
   roomName: string,
   state: boolean
 ): Promise<string> => {
-  const client = await createBroadcastClient();
-  const foundLights: string[] = [];
-  const roomLower = roomName.toLowerCase();
-  const discoveryMessage = Buffer.from(
-    JSON.stringify({ method: "getSystemConfig", params: {} })
-  );
-  const stateMessage = Buffer.from(
-    JSON.stringify({ method: "setPilot", params: { state } })
-  );
+  const ips = findGroupIps(roomName);
+  if (!ips) return `No devices found in group: ${roomName}`;
 
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      client.close();
-      if (foundLights.length === 0) {
-        resolve(`No lights found in room: ${roomName}`);
-      } else {
-        const action = state ? "Turned on" : "Turned off";
-        resolve(`${action} ${foundLights.length} light(s) in ${roomName}`);
-      }
-    }, DISCOVERY_TIMEOUT);
-
-    client.on("message", (msg, rinfo) => {
-      try {
-        const response = JSON.parse(msg.toString());
-        const roomId = response.result?.roomId?.toString() ?? "";
-        const roomName = ROOM_CONFIG[roomId]?.toLowerCase() ?? "";
-
-        // Match by room name (from config) or by roomId directly
-        const matches =
-          (roomName && roomName.includes(roomLower)) ||
-          (roomName && roomLower.includes(roomName)) ||
-          roomId === roomLower;
-
-        if (matches) {
-          foundLights.push(rinfo.address);
-          client.send(
-            stateMessage,
-            0,
-            stateMessage.length,
-            WIZ_PORT,
-            rinfo.address
-          );
-        }
-      } catch {}
-    });
-
-    sendUdp(client, discoveryMessage, WIZ_PORT, BROADCAST_ADDR);
-  });
+  const count = await sendToDeviceIps(ips, { state });
+  const action = state ? "Turned on" : "Turned off";
+  return `${action} ${count} light(s) in ${roomName}`;
 };
 
 export const setAllLightsBrightness = async (
@@ -174,7 +179,7 @@ export const setAllLightsBrightness = async (
   color?: string
 ): Promise<string> => {
   const client = await createBroadcastClient();
-  const params: any = {
+  const params: Record<string, unknown> = {
     state: true,
   };
 
@@ -218,16 +223,10 @@ export const setRoomLightsBrightness = async (
   brightness?: number,
   color?: string
 ): Promise<string> => {
-  const client = await createBroadcastClient();
-  const foundLights: string[] = [];
-  const roomLower = roomName.toLowerCase();
-  const discoveryMessage = Buffer.from(
-    JSON.stringify({ method: "getSystemConfig", params: {} })
-  );
+  const ips = findGroupIps(roomName);
+  if (!ips) return `No devices found in group: ${roomName}`;
 
-  const params: any = {
-    state: true,
-  };
+  const params: Record<string, unknown> = { state: true };
 
   if (brightness !== undefined) {
     params.dimming = Math.max(0, Math.min(100, brightness));
@@ -248,50 +247,12 @@ export const setRoomLightsBrightness = async (
     }
   }
 
-  const brightnessMessage = Buffer.from(
-    JSON.stringify({ method: "setPilot", params })
-  );
-
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      client.close();
-      if (foundLights.length === 0) {
-        resolve(`No lights found in room: ${roomName}`);
-      } else {
-        let msg = `Set ${foundLights.length} light(s) in ${roomName}`;
-        if (brightness !== undefined) msg += ` to ${brightness}%`;
-        if (color) msg += ` with ${color}`;
-        if (brightness === undefined && !color) msg += " to defaults";
-        resolve(msg);
-      }
-    }, DISCOVERY_TIMEOUT);
-
-    client.on("message", (msg, rinfo) => {
-      try {
-        const response = JSON.parse(msg.toString());
-        const roomId = response.result?.roomId?.toString() ?? "";
-        const roomName = ROOM_CONFIG[roomId]?.toLowerCase() ?? "";
-
-        const matches =
-          (roomName && roomName.includes(roomLower)) ||
-          (roomName && roomLower.includes(roomName)) ||
-          roomId === roomLower;
-
-        if (matches) {
-          foundLights.push(rinfo.address);
-          client.send(
-            brightnessMessage,
-            0,
-            brightnessMessage.length,
-            WIZ_PORT,
-            rinfo.address
-          );
-        }
-      } catch {}
-    });
-
-    sendUdp(client, discoveryMessage, WIZ_PORT, BROADCAST_ADDR);
-  });
+  const count = await sendToDeviceIps(ips, params);
+  let msg = `Set ${count} light(s) in ${roomName}`;
+  if (brightness !== undefined) msg += ` to ${brightness}%`;
+  if (color) msg += ` with ${color}`;
+  if (brightness === undefined && !color) msg += " to defaults";
+  return msg;
 };
 
 type ColorResult =
