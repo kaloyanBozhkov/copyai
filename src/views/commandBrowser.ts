@@ -439,6 +439,44 @@ const setupCommandBrowserIPC = () => {
     event.reply("grimoire-settings-data", getSettings());
   });
 
+  // REPL: evaluate JS in main process context
+  ipcMain.on("grimoire-eval", async (event, code: string) => {
+    enableLogForwarding();
+    try {
+      // Wrap in async to support await in expressions
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (...args: any[]) => (...args: any[]) => Promise<any>;
+      const fn = new AsyncFunction("require", "__dirname", "__filename", `return eval(${JSON.stringify(code)})`);
+      const result = await fn(require, __dirname, __filename);
+
+      let serialized: string;
+      if (result === undefined) {
+        serialized = "undefined";
+      } else if (result === null) {
+        serialized = "null";
+      } else if (typeof result === "function") {
+        serialized = `[Function: ${result.name || "anonymous"}]`;
+      } else if (typeof result === "object") {
+        try {
+          serialized = JSON.stringify(result, null, 2);
+        } catch {
+          serialized = String(result);
+        }
+      } else {
+        serialized = String(result);
+      }
+
+      event.reply("grimoire-eval-result", { success: true, result: serialized });
+    } catch (error) {
+      event.reply("grimoire-eval-result", {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      disableLogForwarding();
+    }
+  });
+
   ipcMain.on("grimoire-execute-potion", async (event, id: string) => {
     enableLogForwarding();
     try {
@@ -479,6 +517,7 @@ const cleanupCommandBrowserIPC = () => {
   ipcMain.removeAllListeners("grimoire-add-potion");
   ipcMain.removeAllListeners("grimoire-update-potion");
   ipcMain.removeAllListeners("grimoire-remove-potion");
+  ipcMain.removeAllListeners("grimoire-eval");
   ipcMain.removeAllListeners("grimoire-execute-potion");
 };
 

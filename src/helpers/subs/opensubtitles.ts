@@ -1,7 +1,8 @@
 import path from "path";
 import fs from "fs";
 import os from "os";
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
+import { getChromePath } from "../getChromePath";
 import { createExtractorFromData } from "node-unrar-js";
 import AdmZip from "adm-zip";
 import { retry } from "@koko420/shared";
@@ -53,7 +54,7 @@ export const scrapeSubtitleResults = async (
 ): Promise<SubtitleSearchResult[]> => {
   console.log("Scraping subtitles from:", searchUrl);
 
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({ headless: true, executablePath: getChromePath() });
   try {
     const page = await browser.newPage();
     await page.goto(searchUrl, { waitUntil: "networkidle2", timeout: 30000 });
@@ -126,7 +127,7 @@ export const downloadAndExtractSubtitle = async (
 
   console.log("Downloading subtitle archive via Puppeteer:", downloadUrl);
 
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({ headless: true, executablePath: getChromePath() });
   let buffer: Buffer;
 
   try {
@@ -247,7 +248,7 @@ export const scrapeMovieResults = async (
 ): Promise<MovieSearchResult[]> => {
   console.log("Scraping movie results from:", searchUrl);
 
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({ headless: true, executablePath: getChromePath() });
   try {
     const page = await browser.newPage();
     await page.goto(searchUrl, { waitUntil: "networkidle2", timeout: 30000 });
@@ -307,7 +308,7 @@ export const scrapeEpisodeResults = async (
   const initialSearchUrl = `${OPENSUBTITLES_BASE_URL}/en/search/sublanguageid-${langString}/idmovie-${movieId}`;
   console.log("Checking if TV series at:", initialSearchUrl);
 
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({ headless: true, executablePath: getChromePath() });
   try {
     const page = await browser.newPage();
     await page.goto(initialSearchUrl, {
@@ -691,7 +692,7 @@ ${formattedMovies}
   const showPageUrl = `${OPENSUBTITLES_BASE_URL}/en/search/sublanguageid-${langString}/idmovie-${selectedMovie.movieId}`;
   console.log("Visiting show page:", showPageUrl);
 
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({ headless: true, executablePath: getChromePath() });
   try {
     const page = await browser.newPage();
     await page.goto(showPageUrl, {

@@ -42,6 +42,10 @@ const DEFAULT_SETTINGS: GrimoireSettings = {
   apiKeys: {
     OPENAI_API_KEY: "",
     OPENROUTER_API_KEY: "",
+    SPOTIFY_CLIENT_ID: "",
+    SPOTIFY_CLIENT_SECRET: "",
+    SPOTIFY_REFRESH_TOKEN: "",
+    SPOTIFY_TV_DEVICE_NAME: "",
   },
   book: {},
   alchemy: [],

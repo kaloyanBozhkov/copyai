@@ -1,5 +1,6 @@
 import { parse } from "node-html-parser";
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
+import { getChromePath } from "./getChromePath";
 
 export const getPageHTML = async (url: string, selector = "html") => {
   try {
@@ -28,7 +29,7 @@ export const getPageHTMLWithJS = async ({
   skip?: number;
   returnOuterHTML?: boolean;
 }) => {
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({ headless: true, executablePath: getChromePath() });
   try {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: "networkidle2" });

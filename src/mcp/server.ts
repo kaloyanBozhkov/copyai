@@ -40,7 +40,9 @@ const executeCommand = async (
   args?: string[]
 ): Promise<ApiResponse<string | boolean>> => {
   try {
-    const result = await cmdKitchen(command, args);
+    // Commands expect args as a single-element array with space-separated values
+    const joinedArgs = args?.length ? [args.join(" ")] : undefined;
+    const result = await cmdKitchen(command, joinedArgs);
     
     if (result === undefined) {
       return { success: false, error: `Unknown command: ${command}` };

@@ -124,7 +124,7 @@ export const getAuthorizationUrl = (): string => {
   }
 
   const redirectUri =
-    process.env.DAIKIN_REDIRECT_URI || "http://localhost:3000/callback";
+    process.env.DAIKIN_REDIRECT_URI || "http://127.0.0.1:3000/callback";
   const scope = encodeURIComponent("openid onecta:basic.integration");
 
   return `${AUTH_BASE}/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(

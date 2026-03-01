@@ -17,7 +17,7 @@
     "test:watch": "vitest",
     "package": "npm run build:all && electron-forge package",
     "make": "npm run build:all && electron-forge make",
-    "make:intel": "npm run build:all && electron-forge make --arch=x64"
+    "make:intel": "npm run build:all && cd node_modules/node-datachannel && npx prebuild-install -r napi --arch x64 --platform darwin && cd ../.. && electron-forge make --arch=x64"
   },
   "keywords": [],
   "author": "",
@@ -60,7 +60,7 @@
     "lgtv2": "^1.6.3",
     "node-html-parser": "^7.0.1",
     "node-unrar-js": "^2.0.2",
-    "puppeteer": "^24.34.0",
+    "puppeteer-core": "^24.34.0",
     "spotify-web-api-node": "^5.0.2",
     "uuid": "^13.0.0",
     "webtorrent": "^2.8.5",

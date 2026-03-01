@@ -3,7 +3,9 @@ const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 
 module.exports = {
   packagerConfig: {
-    asar: true,
+    asar: {
+      unpack: "**/{prebuilds,build}/**/*.node",
+    },
     prune: true,
     icon: "./src/assets/copyai-logo",
     extraResource: ["./src/assets/copyai-logo.png"],
@@ -44,7 +46,9 @@ module.exports = {
       ]
     }
   },
-  rebuildConfig: {},
+  rebuildConfig: {
+    force: true,
+  },
   makers: [
     {
       name: '@electron-forge/maker-squirrel',

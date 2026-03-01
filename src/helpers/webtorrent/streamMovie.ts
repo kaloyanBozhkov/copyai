@@ -18,6 +18,8 @@ import {
 } from "../subs/convertSrt";
 import { SupportedLanguage } from "../subs/opensubtitles";
 import { parseSearchQuery } from "./parseSearchQuery";
+import { pathToFileURL } from "url";
+import { getLocalIP } from "../network/getLocalIP";
 
 // Handle UTP connection errors globally - these are normal in P2P networking
 // and shouldn't crash the app
@@ -637,9 +639,10 @@ export const streamMovie = async ({
   }
 
   const processId = uuidv4();
-  // Dynamic import for ESM module (using eval to prevent TS from compiling to require)
+  // Dynamic import for ESM module — resolve absolute path first so it works inside asar
+  const webtorrentUrl = pathToFileURL(require.resolve("webtorrent")).href;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (eval('import("webtorrent")') as Promise<{ default: any }>)
+  (eval(`import("${webtorrentUrl}")`) as Promise<{ default: any }>)
     .then((WebTorrentModule) => {
       const WebTorrent = WebTorrentModule.default;
       const client = new WebTorrent();
@@ -1105,7 +1108,8 @@ export const streamMovie = async ({
 
           server.listen(port, "0.0.0.0", () => {
             const streamUrl = `http://localhost:${port}`;
-            const networkUrl = `http://koko-mac.lan:${port}`;
+            const networkHost = getLocalIP();
+            const networkUrl = `http://${networkHost}:${port}`;
             console.log(`Movie streaming at: ${streamUrl}`);
             console.log(`Movie: ${movieFile.name}`);
             console.log(`Access from network: ${networkUrl}`);

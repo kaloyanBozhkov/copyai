@@ -13,7 +13,7 @@ import {
 
 let wizWindow: BrowserWindow | null = null;
 
-export const showWizSetup = (isDevMode = false): void => {
+export const showWizSetup = (): void => {
   if (wizWindow && !wizWindow.isDestroyed()) {
     wizWindow.focus();
     return;
@@ -93,6 +93,7 @@ const setupWizSetupIPC = () => {
       event.reply("wiz-setup-scan-result", deviceInfos);
     } catch (error) {
       event.reply("wiz-setup-scan-result", []);
+      console.error("Failed to scan lights:", error);
     }
   });
 

@@ -19,7 +19,14 @@ export function SettingsPanel({ settings }: SettingsPanelProps) {
   const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>(() => {
     const entries = Object.entries(settings.apiKeys);
     // Ensure default keys exist
-    const defaultKeys = ["OPENAI_API_KEY", "OPENROUTER_API_KEY"];
+    const defaultKeys = [
+      "OPENAI_API_KEY",
+      "OPENROUTER_API_KEY",
+      "SPOTIFY_CLIENT_ID",
+      "SPOTIFY_CLIENT_SECRET",
+      "SPOTIFY_REFRESH_TOKEN",
+      "SPOTIFY_TV_DEVICE_NAME",
+    ];
     const result: ApiKeyEntry[] = [];
     
     for (const key of defaultKeys) {
@@ -83,7 +90,16 @@ export function SettingsPanel({ settings }: SettingsPanelProps) {
   const handleRemoveKey = (index: number) => {
     const entry = apiKeys[index];
     // Don't allow removing default keys
-    if (["OPENAI_API_KEY", "OPENROUTER_API_KEY"].includes(entry.name)) return;
+    if (
+      [
+        "OPENAI_API_KEY",
+        "OPENROUTER_API_KEY",
+        "SPOTIFY_CLIENT_ID",
+        "SPOTIFY_CLIENT_SECRET",
+        "SPOTIFY_TV_DEVICE_NAME",
+      ].includes(entry.name)
+    )
+      return;
     
     const updated = apiKeys.filter((_, i) => i !== index);
     setApiKeys(updated);
@@ -93,7 +109,14 @@ export function SettingsPanel({ settings }: SettingsPanelProps) {
   };
 
   const isDefaultKey = (name: string) =>
-    ["OPENAI_API_KEY", "OPENROUTER_API_KEY"].includes(name);
+    [
+      "OPENAI_API_KEY",
+      "OPENROUTER_API_KEY",
+      "SPOTIFY_CLIENT_ID",
+      "SPOTIFY_CLIENT_SECRET",
+      "SPOTIFY_REFRESH_TOKEN",
+      "SPOTIFY_TV_DEVICE_NAME",
+    ].includes(name);
 
   const handleSaveLocalDomain = () => {
     ipcRenderer.send("grimoire-update-settings", { localDomain: localDomain.trim() || undefined });

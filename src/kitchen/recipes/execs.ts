@@ -14,7 +14,7 @@ import {
   listRooms,
   parseBrightnessAndColor,
 } from "../../helpers/wiz";
-import { getWizGroups } from "../grimoireSettings";
+import { getWizGroups, getApiKey } from "../grimoireSettings";
 import { showWizSetup } from "../../views/wizSetup";
 import {
   turnOnTV,
@@ -76,7 +76,15 @@ import {
   SupportedLanguage,
   isSupportedLanguage,
 } from "../../helpers/subs/opensubtitles";
-import { playSpotify } from "../../helpers/spotify";
+import {
+  playSpotify,
+  pauseSpotify,
+  resumeSpotify,
+  switchSpotifyDevice,
+  listSpotifyDevices,
+  authorizeSpotify,
+  exchangeCodeForTokens,
+} from "../../helpers/spotify";
 import { addToWatchHistory } from "../../helpers/webtorrent/watchHistory";
 import { showWatchHistory } from "../../views/watchHistory";
 
@@ -867,6 +875,24 @@ export const execsPerCategory: Record<
     ],
   },
   spotify: {
+    authorize: [
+      () => {
+        authorizeSpotify((url) => exec(`open "${url}"`))
+          .then((msg) => console.log("[Spotify]", msg))
+          .catch((err) => console.error("[Spotify] auth failed:", err));
+        return "Opening Spotify auth in browser... approve the permissions and the token will be saved automatically.";
+      },
+    ],
+    code: [
+      async (args?: string[]) => {
+        const code = args?.[0];
+        if (!code) return "no authorization code provided";
+        await exchangeCodeForTokens(code);
+        return "Spotify authorized! Refresh token saved to Grimoire Settings.";
+      },
+      "code: string",
+    ],
+    devices: [async () => listSpotifyDevices()],
     play: [
       async (args?: string[]) => {
         if (!args || args.length === 0)
@@ -876,10 +902,8 @@ export const execsPerCategory: Record<
         let random = false;
         let trackIndex: number | undefined;
 
-        // Parse arguments
         for (let i = 0; i < args.length; i++) {
           const arg = args[i];
-
           if (arg === "-random" || arg === "-r") {
             random = true;
           } else if (
@@ -889,10 +913,9 @@ export const execsPerCategory: Record<
             const num = parseInt(args[i + 1], 10);
             if (!isNaN(num)) {
               trackIndex = num;
-              i++; // Skip next arg since we consumed it
+              i++;
             }
           } else {
-            // It's part of the keyword/song name
             keyword += (keyword ? " " : "") + arg;
           }
         }
@@ -900,6 +923,48 @@ export const execsPerCategory: Record<
         if (!keyword) return "no keyword or song name provided";
 
         return playSpotify(keyword, random, trackIndex);
+      },
+      "keyword or song: string, -random|-r?: flag, -number|-n <index>?: number",
+    ],
+    pause: [async () => pauseSpotify()],
+    resume: [async () => resumeSpotify()],
+    switch_device: [
+      async (args?: string[]) => {
+        if (!args || args.length === 0) return "no device name provided";
+        return switchSpotifyDevice(args.join(" "));
+      },
+      "device name: string",
+    ],
+    tv_play: [
+      async (args?: string[]) => {
+        if (!args || args.length === 0)
+          return "no keyword or song name provided";
+
+        let keyword = "";
+        let random = false;
+        let trackIndex: number | undefined;
+
+        for (let i = 0; i < args.length; i++) {
+          const arg = args[i];
+          if (arg === "-random" || arg === "-r") {
+            random = true;
+          } else if (
+            (arg === "-number" || arg === "-n") &&
+            i + 1 < args.length
+          ) {
+            const num = parseInt(args[i + 1], 10);
+            if (!isNaN(num)) {
+              trackIndex = num;
+              i++;
+            }
+          } else {
+            keyword += (keyword ? " " : "") + arg;
+          }
+        }
+
+        if (!keyword) return "no keyword or song name provided";
+
+        return playSpotify(keyword, random, trackIndex, getApiKey("SPOTIFY_TV_DEVICE_NAME") || undefined);
       },
       "keyword or song: string, -random|-r?: flag, -number|-n <index>?: number",
     ],
@@ -978,6 +1043,18 @@ export const execsPerCategory: Record<
         },
         "search: string",
       ],
+      play_spotify: [
+        async (args?: string[]) => {
+          if (!args || args.length === 0) return "no song name provided";
+          const song = args.join(" ");
+          await launchTVApp("spotify");
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          return playSpotify(song, false, undefined, getApiKey("SPOTIFY_TV_DEVICE_NAME") || undefined);
+        },
+        "song: string",
+      ],
+      pause_spotify: [async () => pauseSpotify()],
+      resume_spotify: [async () => resumeSpotify()],
       setup: [
         async (args?: string[]) => {
           const force = args?.[0] === "force";
