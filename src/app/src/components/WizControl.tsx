@@ -18,10 +18,13 @@ export function WizControl() {
   const [groups, setGroups] = useState<WizGroup[]>([]);
   const [deviceStates, setDeviceStates] = useState<Record<string, boolean>>({});
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
 
   const fetchStates = useCallback((devs: WizDeviceInfo[]) => {
     if (devs.length > 0) {
       ipcRenderer.send("wiz-control-get-states", devs.map((d) => d.ip));
+    } else {
+      setLoading(false);
     }
   }, []);
 
@@ -37,6 +40,7 @@ export function WizControl() {
 
     const handleStates = (_: unknown, states: Record<string, boolean>) => {
       setDeviceStates((prev) => ({ ...prev, ...states }));
+      setLoading(false);
     };
 
     ipcRenderer.on("wiz-control-init", handleInit);
@@ -110,7 +114,14 @@ export function WizControl() {
 
       {/* Groups */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
-        {groups.length === 0 && ungrouped.length === 0 && (
+        {loading && (
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-grimoire-text-dim">
+            <Lightbulb size={40} className="opacity-30 animate-pulse" />
+            <p className="text-sm">Fetching light states...</p>
+          </div>
+        )}
+
+        {!loading && groups.length === 0 && ungrouped.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-grimoire-text-dim">
             <Lightbulb size={40} className="opacity-30" />
             <p className="text-sm">No groups configured.</p>
@@ -118,7 +129,7 @@ export function WizControl() {
           </div>
         )}
 
-        {groups.map((group) => {
+        {!loading && groups.map((group) => {
           const anyOn = group.deviceIps.some((ip) => deviceStates[ip]);
           return (
             <div key={group.name} className="space-y-2">
@@ -189,7 +200,7 @@ export function WizControl() {
         })}
 
         {/* Ungrouped devices */}
-        {ungrouped.length > 0 && (
+        {!loading && ungrouped.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-3">
               <span className="font-fantasy text-sm font-semibold text-grimoire-text-dim">
