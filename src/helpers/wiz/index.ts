@@ -12,8 +12,12 @@ export interface WizDevice {
 }
 
 const createBroadcastClient = (): Promise<dgram.Socket> => {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const client = dgram.createSocket("udp4");
+    client.on("error", (err) => {
+      client.close();
+      reject(err);
+    });
     client.bind(() => {
       client.setBroadcast(true);
       resolve(client);
