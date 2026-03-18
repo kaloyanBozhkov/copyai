@@ -87,6 +87,11 @@ import {
 } from "../../helpers/spotify";
 import { addToWatchHistory } from "../../helpers/webtorrent/watchHistory";
 import { showWatchHistory } from "../../views/watchHistory";
+import { streamScreen } from "../../helpers/screenStream/streamScreen";
+import {
+  getActiveProcesses,
+  removeActiveProcess,
+} from "../../electron/tray";
 
 // Helper to find and stream a movie torrent
 const streamMovieTorrent = async (
@@ -824,6 +829,26 @@ export const execsPerCategory: Record<
         return "Opening watch history...";
       },
     ],
+    end_streams: [
+      async () => {
+        const processes = getActiveProcesses();
+        const streamAndDownloadProcesses = processes.filter(
+          (p) => p.type === "stream" || p.type === "download"
+        );
+
+        if (streamAndDownloadProcesses.length === 0) {
+          return "No active streams or downloads to stop.";
+        }
+
+        for (const process of streamAndDownloadProcesses) {
+          console.log(`Stopping ${process.type}: ${process.name}`);
+          process.cleanup();
+          removeActiveProcess(process.id);
+        }
+
+        return `Stopped ${streamAndDownloadProcesses.length} active stream(s)/download(s).`;
+      },
+    ],
   },
   transfer: {
     server: [async () => startTransferServer()],
@@ -850,6 +875,17 @@ export const execsPerCategory: Record<
         });
       },
       "title: string, subsLanguage?: -eng | -bul | -ita",
+    ],
+    screen_stream: [
+      async () => {
+        console.log("[TV] Starting screen stream");
+        return streamScreen({
+          onStreamReady: (url) => {
+            console.log("[TV] Screen stream ready, opening TV browser:", url);
+            openTVBrowser(url);
+          },
+        });
+      },
     ],
   },
   laptop: {
@@ -1048,10 +1084,33 @@ export const execsPerCategory: Record<
           if (!args || args.length === 0) return "no song name provided";
           const song = args.join(" ");
           await launchTVApp("spotify");
-          await new Promise((resolve) => setTimeout(resolve, 3000));
-          return playSpotify(song, false, undefined, getApiKey("SPOTIFY_TV_DEVICE_NAME") || undefined);
+          await turnOnTVScreen().catch(() => { });
+          // await new Promise((resolve) => setTimeout(resolve, 3000));
+          const result = await playSpotify(song, false, undefined, getApiKey("SPOTIFY_TV_DEVICE_NAME") || undefined);
+          return result;
         },
         "song: string",
+      ],
+      play_spotify_dim: [
+        async (args?: string[]) => {
+          if (!args) return "usage: play_spotify_dim <brightness> <color> <song name>";
+          const [brightnessStr, color, ...songParts] = args[0].split(" ");
+          const brightness = parseInt(brightnessStr, 10);
+          console.log("Setting lights brightness and color to", brightness, color);
+          if (isNaN(brightness) || brightness < 0 || brightness > 100) return "brightness must be 0-100";
+          const song = songParts.join(" ");
+          if (!song) return "no song name provided";
+
+          await setRoomLightsBrightness("living-room-all", brightness, color).catch(() => { });
+          await setRoomLightsBrightness("kitchen", brightness, color).catch(() => { });
+
+          await launchTVApp("spotify");
+          // await new Promise((resolve) => setTimeout(resolve, 3000));
+          const result = await playSpotify(song, false, undefined, getApiKey("SPOTIFY_TV_DEVICE_NAME") || undefined);
+          await turnOnTVScreen().catch(() => { });
+          return result;
+        },
+        "brightness: number (0-100), color: string, song: string",
       ],
       pause_spotify: [async () => pauseSpotify()],
       resume_spotify: [async () => resumeSpotify()],
@@ -1334,6 +1393,8 @@ export const execDescriptions: Record<string, string> = {
   "download.movie": "Download movie torrent",
   "download.anime": "Download anime torrent",
   "download.subs": "Download subtitles for movie",
+  // Media
+  "media.end_streams": "Stop all active streams and downloads",
   // Utils
   "uuid.generate": "Generate random UUID",
   "transfer.start": "Start file transfer server",

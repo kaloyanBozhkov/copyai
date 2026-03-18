@@ -6,6 +6,7 @@ import { log } from "./electron/logError";
 import { setupSPAListeners } from "./electron/spaListeners";
 import { downloadProcessUI } from "./helpers/webtorrent/downloadMovie";
 import { streamProcessUI } from "./helpers/webtorrent/streamMovie";
+import { screenStreamProcessUI } from "./helpers/screenStream/streamScreen";
 import { startMCPServer, stopMCPServer } from "./mcp/server";
 import { ensureSettingsFileExists } from "./kitchen/grimoireSettings";
 
@@ -20,6 +21,7 @@ app.whenReady().then(async () => {
   // Register process types for tray
   registerProcessType("download", downloadProcessUI);
   registerProcessType("stream", streamProcessUI);
+  registerProcessType("screen_stream", screenStreamProcessUI);
 
   if (!isDevMode) {
     await setupAutoLaunch();

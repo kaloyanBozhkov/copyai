@@ -126,6 +126,13 @@ export const downloadMovie = async ({
 
           torrent.on("done", () => {
             console.log(`Download complete: ${selectedFiles.length} files`);
+            // Stop seeding immediately
+            try {
+              torrent.pause();
+              console.log("Stopped seeding (torrent paused)");
+            } catch (e) {
+              console.warn("Could not pause torrent:", e);
+            }
             // Remove from tray
             removeActiveProcess(processId);
             // Open Finder at the movie folder when done

@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import SpotifyWebApi from "spotify-web-api-node";
+import SpotifyWebApi, { type PlayOptions } from "spotify-web-api-node";
 import playlists from "../lg/spotify.json";
 import {
   getAccessToken,
@@ -9,27 +8,27 @@ import {
 
 export { authorizeSpotify, exchangeCodeForTokens };
 
-// Cast to any: the library uses dynamic method injection (_addMethods) at
-// runtime which TypeScript's strict mode can't see through the export= declaration.
-const getApi = async (): Promise<any> => {
+const getApi = async () => {
   const clientId = process.env.SPOTIFY_CLIENT_ID!;
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET!;
-  const api = new SpotifyWebApi({ clientId, clientSecret }) as any;
+  const api = new SpotifyWebApi({ clientId, clientSecret });
   api.setAccessToken(await getAccessToken());
   return api;
 };
 
+type SpotifyClient = Awaited<ReturnType<typeof getApi>>;
+
 const resolveDevice = async (
-  api: any,
+  api: SpotifyClient,
   deviceName?: string
-): Promise<{ id: string | undefined; name: string | undefined }> => {
+): Promise<{ id: string | null; name: string | undefined }> => {
   const result = await api.getMyDevices();
-  const devices: any[] = result.body.devices;
+  const devices = result.body.devices;
 
   if (deviceName) {
     // Match by exact ID or partial name
     const match = devices.find(
-      (d: any) =>
+      (d) =>
         d.id === deviceName ||
         d.name?.toLowerCase().includes(deviceName.toLowerCase())
     );
@@ -37,22 +36,22 @@ const resolveDevice = async (
   }
 
   // Fall back to currently active device
-  const active = devices.find((d: any) => d.is_active);
-  return { id: active?.id, name: active?.name };
+  const active = devices.find((d) => d.is_active);
+  return { id: active?.id ?? null, name: active?.name ?? undefined };
 };
 
 /** Search user's own playlists by name (case-insensitive partial match). */
 const findUserPlaylist = async (
-  api: any,
+  api: SpotifyClient,
   name: string
 ): Promise<{ id: string; name: string } | null> => {
   let offset = 0;
   const limit = 50;
   while (true) {
-    const result = await api.getMyPlaylists({ limit, offset });
-    const items: any[] = result.body.items;
+    const result = await api.getUserPlaylists({ limit, offset });
+    const items = result.body.items;
     if (!items.length) return null;
-    const match = items.find((p: any) =>
+    const match = items.find((p) =>
       p.name?.toLowerCase().includes(name.toLowerCase())
     );
     if (match) return { id: match.id, name: match.name };
@@ -89,19 +88,20 @@ export const switchSpotifyDevice = async (keyword: string): Promise<string> => {
   try {
     const api = await getApi();
     const result = await api.getMyDevices();
-    const devices: any[] = result.body.devices;
+    const devices = result.body.devices;
 
-    const match = devices.find((d: any) =>
-      d.id === keyword ||
-      d.name?.toLowerCase().includes(keyword.toLowerCase())
+    const match = devices.find(
+      (d) =>
+        d.id === keyword ||
+        d.name?.toLowerCase().includes(keyword.toLowerCase())
     );
 
     if (!match) {
-      const names = devices.map((d: any) => d.name).join(", ");
+      const names = devices.map((d) => d.name).join(", ");
       return `No device matching "${keyword}" found. Available: ${names || "none"}`;
     }
 
-    await api.transferMyPlayback([match.id], { play: true });
+    await api.transferMyPlayback([match.id!], { play: true });
     return `Switched playback to ${match.name}`;
   } catch (error) {
     return `Failed to switch device: ${
@@ -119,7 +119,7 @@ export const listSpotifyDevices = async (): Promise<string> => {
       return "No active Spotify devices found. Open Spotify on any device first.";
     return devices
       .map(
-        (d: any) =>
+        (d) =>
           `${d.is_active ? "[active] " : ""}${d.name} (${d.type}) id:${d.id}`
       )
       .join("\n");
@@ -167,7 +167,7 @@ export const playSpotify = async (
       if (predefinedId === "collection:tracks") {
         // Liked songs — fetch up to 50 and pick one
         const saved = await api.getMySavedTracks({ limit: 50 });
-        const uris = saved.body.items.map((i: any) => i.track.uri);
+        const uris = saved.body.items.map((i) => i.track.uri);
         if (!uris.length) return "No liked songs found";
         const idx = random ? Math.floor(Math.random() * uris.length) : (trackIndex ?? 0);
         await api.play({ ...deviceOpts, uris: [uris[idx]] });
@@ -175,7 +175,7 @@ export const playSpotify = async (
       }
 
       await api.setShuffle(!!random, deviceOpts);
-      const playOpts: any = { ...deviceOpts, context_uri: `spotify:playlist:${predefinedId}` };
+      const playOpts: PlayOptions = { ...deviceOpts, context_uri: `spotify:playlist:${predefinedId}` };
       if (!random && trackIndex !== undefined) playOpts.offset = { position: trackIndex };
       await api.play(playOpts);
       return `Playing ${keyword} playlist${random ? " (shuffled)" : ""}${suffix}`;
@@ -186,7 +186,7 @@ export const playSpotify = async (
 
     if (userPlaylist) {
       await api.setShuffle(!!random, deviceOpts);
-      const playOpts: any = { ...deviceOpts, context_uri: `spotify:playlist:${userPlaylist.id}` };
+      const playOpts: PlayOptions = { ...deviceOpts, context_uri: `spotify:playlist:${userPlaylist.id}` };
       if (!random && trackIndex !== undefined) playOpts.offset = { position: trackIndex };
       await api.play(playOpts);
       return `Playing "${userPlaylist.name}" playlist${random ? " (shuffled)" : ""}${suffix}`;
@@ -197,8 +197,17 @@ export const playSpotify = async (
     const track = search.body.tracks?.items[0];
     if (!track) return `No track or playlist found for: ${keyword}`;
 
-    await api.play({ ...deviceOpts, uris: [track.uri] });
-    return `Playing "${track.name}" by ${track.artists.map((a: any) => a.name).join(", ")}${suffix}`;
+    // Play within album context so Spotify continues with related tracks after
+    if (track.album?.uri) {
+      await api.play({
+        ...deviceOpts,
+        context_uri: track.album.uri,
+        offset: { uri: track.uri },
+      });
+    } else {
+      await api.play({ ...deviceOpts, uris: [track.uri] });
+    }
+    return `Playing "${track.name}" by ${track.artists.map((a) => a.name).join(", ")}${suffix}`;
   } catch (error) {
     return `Failed to play on Spotify: ${
       error instanceof Error ? error.message : String(error)

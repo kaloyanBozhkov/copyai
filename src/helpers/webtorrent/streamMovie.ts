@@ -1130,6 +1130,14 @@ export const streamMovie = async ({
               "Stream server will remain active while connections exist"
             );
 
+            // Stop seeding - pause torrent to stop uploading to peers
+            try {
+              torrent.pause();
+              console.log("Stopped seeding (torrent paused)");
+            } catch (e) {
+              console.warn("Could not pause torrent:", e);
+            }
+
             // Update tray to show streaming status
             updateActiveProcess(processId, {
               progress: 1,

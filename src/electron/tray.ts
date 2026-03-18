@@ -7,13 +7,14 @@ import { showWizControl } from "../views/wizControl";
 import { log } from "./logError";
 import type { DownloadProcess } from "../helpers/webtorrent/downloadMovie";
 import type { StreamProcess } from "../helpers/webtorrent/streamMovie";
+import type { ScreenStreamProcess } from "../helpers/screenStream/streamScreen";
 
 let tray: Tray | null = null;
 let isDevMode = false;
 let updateInterval: NodeJS.Timeout | null = null;
 
 // Union type of all possible active processes
-export type ActiveProcess = DownloadProcess | StreamProcess;
+export type ActiveProcess = DownloadProcess | StreamProcess | ScreenStreamProcess;
 
 // Registry of process type handlers
 interface ProcessTypeHandler<T extends ActiveProcess = ActiveProcess> {
@@ -202,6 +203,10 @@ export const updateActiveProcess = (
     });
     // Menu will be updated by the interval
   }
+};
+
+export const getActiveProcesses = (): ActiveProcess[] => {
+  return Array.from(activeProcesses.values());
 };
 
 export const removeActiveProcess = (id: string) => {
