@@ -46,6 +46,7 @@ const DEFAULT_SETTINGS: GrimoireSettings = {
     SPOTIFY_CLIENT_SECRET: "",
     SPOTIFY_REFRESH_TOKEN: "",
     SPOTIFY_TV_DEVICE_NAME: "",
+    LG_TV_MAC: "",
   },
   book: {},
   alchemy: [],

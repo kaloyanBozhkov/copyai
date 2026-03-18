@@ -6,6 +6,7 @@ import os from "os";
 import fs from "fs";
 import dgram from "dgram";
 import appsMap from "./apps.json";
+import { getApiKey } from "../../kitchen/grimoireSettings";
 
 // Disable SSL verification for LG TV's self-signed certificate
 // Only affects this connection, safe for local network
@@ -116,8 +117,8 @@ const connectAndExecute = <T>(
   });
 };
 
-// TV MAC address for Wake-on-LAN
-const TV_MAC = process.env.LG_TV_MAC || "7C:64:6C:A0:E4:51";
+// TV MAC address for Wake-on-LAN (from Grimoire Settings)
+const getTV_MAC = () => getApiKey("LG_TV_MAC") || "7C:64:6C:A0:E4:51";
 
 /**
  * Send Wake-on-LAN magic packet to multiple broadcast addresses and ports.
@@ -161,7 +162,7 @@ const sendWOL = (mac: string): Promise<void> => {
  */
 export const turnOnTV = async (): Promise<string> => {
   try {
-    await sendWOL(TV_MAC);
+    await sendWOL(getTV_MAC());
     return "TV WOL packet sent";
   } catch (error) {
     return `Failed to send WOL: ${error instanceof Error ? error.message : String(error)}`;
