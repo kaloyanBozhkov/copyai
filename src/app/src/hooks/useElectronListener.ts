@@ -3,10 +3,21 @@ import { ipcRenderer } from "../utils/electron";
 
 import type { Route } from "../store/useRouteStore";
 
+export type FormField = {
+  name: string;
+  label: string;
+  type: "text" | "password" | "select";
+  placeholder?: string;
+  defaultValue?: string;
+  options?: { label: string; value: string }[];
+  required?: boolean;
+};
+
 type EventPayloads = {
   "autocomplete-result": { key: string; args: string[]; isTabPress: boolean };
   "app-init": { route: Route; isDevMode: boolean };
   "command-processing-completed": { success: boolean };
+  "command-form-init": { title: string; fields: FormField[] };
 };
 
 type EventName = keyof EventPayloads;

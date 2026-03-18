@@ -8,6 +8,7 @@ import {
   GATEWAY_URL,
   GATEWAY_HEADERS,
   EMP_HEADERS,
+  APPLICATION_KEY,
   CLIENT_ID,
   OAUTH_CLIENT_KEY,
   OAUTH_SECRET_KEY,
@@ -247,7 +248,7 @@ export const setupThinQ = async (
   if (!access_token) throw new Error("Token exchange failed");
 
   // Step 7: Get user number
-  const userNumber = await getUserNumber(access_token, gateway, secretKey);
+  const userNumber = await getUserNumber(access_token, gateway);
 
   const authData: StoredAuth = {
     accessToken: access_token,
@@ -268,26 +269,40 @@ export const setupThinQ = async (
  */
 const getUserNumber = async (
   accessToken: string,
-  gateway: GatewayInfo,
-  secretKey: string
+  gateway: GatewayInfo
 ): Promise<string> => {
   const timestamp = new Date().toUTCString();
   const reqPath = "/users/profile";
-  const sig = hmacSign(`${reqPath}\n${timestamp}`, secretKey);
+  const sig = hmacSign(`${reqPath}\n${timestamp}`, OAUTH_SECRET_KEY);
+
+  const profileUrl = `${gateway.empOauthBaseUri}/users/profile`;
+  console.log("[ThinQ] Getting user profile from:", profileUrl);
 
   try {
-    const res = await axios.get(`${gateway.empOauthBaseUri}${reqPath}`, {
+    const res = await axios.get(profileUrl, {
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${accessToken}`,
-        "x-lge-appkey": CLIENT_ID,
-        "x-lge-oauth-signature": sig,
+        "X-Lge-Svccode": "SVC202",
+        "X-Application-Key": APPLICATION_KEY,
+        "lgemp-x-app-key": CLIENT_ID,
+        "X-Device-Type": "M01",
+        "X-Device-Platform": "ADR",
         "x-lge-oauth-date": timestamp,
+        "x-lge-oauth-signature": sig,
       },
+      timeout: 15000,
     });
-    return res.data?.account?.userNo || res.data?.userNo || crypto.randomUUID();
-  } catch {
-    return crypto.randomUUID();
+    const userNo = res.data?.account?.userNo;
+    console.log("[ThinQ] Got user number:", userNo ? "yes" : "no");
+    if (!userNo) {
+      console.error("[ThinQ] Profile response:", JSON.stringify(res.data));
+      throw new Error("No userNo in profile response");
+    }
+    return userNo;
+  } catch (err: any) {
+    console.error("[ThinQ] getUserNumber failed:", err.response?.status, JSON.stringify(err.response?.data || err.message));
+    throw new Error(`Failed to get user profile: ${err.response?.status || err.message}`);
   }
 };
 

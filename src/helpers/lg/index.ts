@@ -4,8 +4,8 @@ import WebSocket, { RawData } from "ws";
 import path from "path";
 import os from "os";
 import fs from "fs";
+import dgram from "dgram";
 import appsMap from "./apps.json";
-import { turnOnViaCloud, hasTokens } from "./thinq";
 
 // Disable SSL verification for LG TV's self-signed certificate
 // Only affects this connection, safe for local network
@@ -116,41 +116,55 @@ const connectAndExecute = <T>(
   });
 };
 
+// TV MAC address for Wake-on-LAN
+const TV_MAC = process.env.LG_TV_MAC || "7C:64:6C:A0:E4:51";
+
 /**
- * Turn on the LG TV.
- * Tries ThinQ cloud first (works when TV is fully off), falls back to local WebSocket.
+ * Send Wake-on-LAN magic packet to multiple broadcast addresses and ports.
+ */
+const sendWOL = (mac: string): Promise<void> => {
+  const macBytes = Buffer.from(mac.replace(/:/g, ""), "hex");
+  const packet = Buffer.concat([
+    Buffer.alloc(6, 0xff),
+    ...Array(16).fill(macBytes),
+  ]);
+
+  const broadcasts = ["255.255.255.255", "192.168.1.255", "192.168.0.255"];
+  const ports = [7, 9];
+
+  const promises = broadcasts.flatMap((broadcast) =>
+    ports.map(
+      (port) =>
+        new Promise<void>((resolve, reject) => {
+          const sock = dgram.createSocket("udp4");
+          sock.once("error", (err) => {
+            sock.close();
+            reject(err);
+          });
+          sock.bind(() => {
+            sock.setBroadcast(true);
+            sock.send(packet, 0, packet.length, port, broadcast, (err) => {
+              sock.close();
+              if (err) reject(err);
+              else resolve();
+            });
+          });
+        })
+    )
+  );
+
+  return Promise.all(promises).then(() => {});
+};
+
+/**
+ * Turn on the LG TV via Wake-on-LAN.
  */
 export const turnOnTV = async (): Promise<string> => {
-  // Try ThinQ cloud first (can wake TV from fully off state)
-  if (hasTokens()) {
-    try {
-      const result = await turnOnViaCloud();
-      return result;
-    } catch (error) {
-      console.log(
-        "ThinQ cloud wake failed, trying local WebSocket:",
-        error instanceof Error ? error.message : String(error)
-      );
-    }
-  }
-
-  // Fall back to local WebSocket (only works if TV is in standby with network active)
   try {
-    await connectAndExecute(async (tv) => {
-      return new Promise((resolve, reject) => {
-        tv.request("ssap://system/turnOn", (err: Error, res: any) => {
-          if (err) reject(err);
-          else resolve(res);
-        });
-      });
-    });
-    return "TV turned on";
+    await sendWOL(TV_MAC);
+    return "TV WOL packet sent";
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    if (!hasTokens()) {
-      return `Failed to turn on TV: ${msg}. Run tv.thinq_setup to enable cloud wake.`;
-    }
-    return `Failed to turn on TV: ${msg}`;
+    return `Failed to send WOL: ${error instanceof Error ? error.message : String(error)}`;
   }
 };
 

@@ -7,6 +7,7 @@ import { CommandGrimoire } from "./components/grimoire";
 import { WatchHistory } from "./components/WatchHistory";
 import { WizSetup } from "./components/WizSetup";
 import { WizControl } from "./components/WizControl";
+import { CommandForm } from "./components/CommandForm";
 
 export default function App() {
   useInit();
@@ -59,6 +60,8 @@ export default function App() {
                 <Thinking />
               </div>
             );
+          case "command-form":
+            return <CommandForm />;
           default:
             return null;
         }

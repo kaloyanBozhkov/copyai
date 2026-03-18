@@ -48,13 +48,111 @@ export const listDevices = async (): Promise<ThinQDevice[]> => {
   const { token, userNumber, gateway } = await getAccessToken();
   const headers = getHeaders(token, userNumber, gateway.countryCode, gateway.languageCode);
 
+  // Try v1 device list
+  console.log("[ThinQ] Trying v1 device list...");
+  try {
+    const v1Headers = {
+      "x-thinq-token": token,
+      "x-thinq-application-key": "wideq",
+      "x-thinq-security-key": "nuts_securitykey",
+      "x-country-code": gateway.countryCode,
+      "x-language-code": gateway.languageCode,
+      Accept: "application/json",
+    };
+    const v1Res = await axios.get(`${gateway.thinq1Uri}/service/application/dashboard`, { headers: v1Headers });
+    console.log("[ThinQ] v1 dashboard:", JSON.stringify(v1Res.data).substring(0, 1000));
+  } catch (e: any) {
+    console.log("[ThinQ] v1 dashboard failed:", e.response?.status, JSON.stringify(e.response?.data).substring(0, 500));
+  }
+
+  // Try v2 user devices (no home filter)
+  console.log("[ThinQ] Trying v2 user devices...");
+  try {
+    const userDevRes = await axios.get(`${gateway.thinq2Uri}/service/users/${userNumber}/devices`, { headers });
+    console.log("[ThinQ] user devices:", JSON.stringify(userDevRes.data).substring(0, 1000));
+  } catch (e: any) {
+    console.log("[ThinQ] user devices failed:", e.response?.status);
+  }
+
+  // Try v2 single device list endpoint
+  console.log("[ThinQ] Trying v2 /service/devices ...");
+  try {
+    const devListRes = await axios.get(`${gateway.thinq2Uri}/service/devices`, { headers });
+    console.log("[ThinQ] devices list:", JSON.stringify(devListRes.data).substring(0, 1000));
+  } catch (e: any) {
+    console.log("[ThinQ] devices list failed:", e.response?.status);
+  }
+
+  // Try v2 with different auth header format
+  console.log("[ThinQ] Trying v2 with Authorization Bearer...");
+  try {
+    const bearerHeaders = {
+      ...headers,
+      "Authorization": `Bearer ${token}`,
+    };
+    const bearerRes = await axios.get(`${gateway.thinq2Uri}/service/application/dashboard`, { headers: bearerHeaders });
+    const bearerItems = bearerRes.data?.result?.item || [];
+    console.log("[ThinQ] Bearer dashboard devices:", bearerItems.length);
+    if (bearerItems.length > 0) {
+      for (const d of bearerItems) {
+        console.log("[ThinQ] device:", d.alias, "type:", d.deviceType, "id:", d.deviceId);
+      }
+    }
+  } catch (e: any) {
+    console.log("[ThinQ] Bearer dashboard failed:", e.response?.status);
+  }
+
+  // Try the IoT service endpoint (TVs sometimes use this)
+  console.log("[ThinQ] Trying IoT service...");
+  try {
+    const iotRes = await axios.get("https://eic-iotservice.lgthinq.com/v1/service/devices", { headers });
+    console.log("[ThinQ] IoT devices:", JSON.stringify(iotRes.data).substring(0, 500));
+  } catch (e: any) {
+    console.log("[ThinQ] IoT failed:", e.response?.status);
+  }
+
+  // Try v2 dashboard endpoint
+  console.log("[ThinQ] Trying dashboard endpoint...");
+  try {
+    const dashRes = await axios.get(`${gateway.thinq2Uri}/service/application/dashboard`, { headers });
+    console.log("[ThinQ] Dashboard response keys:", JSON.stringify(Object.keys(dashRes.data?.result || {})));
+    const dashItems = dashRes.data?.result?.item || [];
+    console.log("[ThinQ] Dashboard devices:", dashItems.length);
+    if (dashItems.length > 0) {
+      for (const d of dashItems) {
+        console.log("[ThinQ] device:", d.alias, "type:", d.deviceType, "model:", d.modelName, "id:", d.deviceId);
+      }
+      return dashItems.map((d: any) => ({
+        deviceId: d.deviceId,
+        alias: d.alias || d.deviceId,
+        deviceType: d.deviceType,
+        modelName: d.modelName || "",
+      }));
+    }
+  } catch (e: any) {
+    console.log("[ThinQ] Dashboard failed:", e.response?.status, JSON.stringify(e.response?.data));
+  }
+
+  // Fallback: get homes list, then fetch each home's devices
+  console.log("[ThinQ] Trying homes endpoint...");
   const res = await axios.get(`${gateway.thinq2Uri}/service/homes`, { headers });
   const homes = res.data?.result?.item || [];
+  console.log("[ThinQ] Found", homes.length, "home(s)");
 
   const devices: ThinQDevice[] = [];
   for (const home of homes) {
-    if (home.devices) {
-      for (const d of home.devices) {
+    console.log("[ThinQ] Fetching devices for home:", home.homeName, home.homeId);
+    try {
+      const homeRes = await axios.get(
+        `${gateway.thinq2Uri}/service/homes/${home.homeId}`,
+        { headers }
+      );
+      console.log("[ThinQ] Home response keys:", JSON.stringify(Object.keys(homeRes.data?.result || {})));
+      console.log("[ThinQ] Home raw:", JSON.stringify(homeRes.data?.result).substring(0, 1000));
+      const homeDevices = homeRes.data?.result?.devices || homeRes.data?.result?.item || [];
+      console.log("[ThinQ] Home has", homeDevices.length, "device(s)");
+      for (const d of homeDevices) {
+        console.log("[ThinQ] device:", d.alias, "type:", d.deviceType, "model:", d.modelName, "id:", d.deviceId);
         devices.push({
           deviceId: d.deviceId,
           alias: d.alias || d.deviceId,
@@ -62,6 +160,8 @@ export const listDevices = async (): Promise<ThinQDevice[]> => {
           modelName: d.modelName || "",
         });
       }
+    } catch (e: any) {
+      console.log("[ThinQ] Failed to fetch home devices:", e.response?.status, JSON.stringify(e.response?.data));
     }
   }
   return devices;
@@ -101,28 +201,34 @@ export const turnOnViaCloud = async (): Promise<string> => {
 
   const headers = getHeaders(token, userNumber, gateway.countryCode, gateway.languageCode);
 
+  console.log("[ThinQ] TV found:", tv.alias, "id:", tv.deviceId, "type:", tv.deviceType);
+
   // Try v2 control
   try {
+    const url1 = `${gateway.thinq2Uri}/service/devices/${tv.deviceId}/control-sync`;
+    console.log("[ThinQ] Trying v2 control-sync:", url1);
     await axios.post(
-      `${gateway.thinq2Uri}/service/devices/${tv.deviceId}/control-sync`,
+      url1,
       { ctrlKey: "basicCtrl", command: "Set", dataKey: "airState.operation.power", dataValue: "1" },
       { headers }
     );
     return `TV '${tv.alias}' power-on sent via ThinQ cloud`;
-  } catch {
+  } catch (e1: any) {
+    console.log("[ThinQ] v2 control-sync failed:", e1.response?.status, JSON.stringify(e1.response?.data));
     // Try WOL via v2
     try {
-      await axios.post(
-        `${gateway.thinq2Uri}/service/devices/${tv.deviceId}/wol`,
-        {},
-        { headers }
-      );
+      const url2 = `${gateway.thinq2Uri}/service/devices/${tv.deviceId}/wol`;
+      console.log("[ThinQ] Trying v2 WOL:", url2);
+      await axios.post(url2, {}, { headers });
       return `TV '${tv.alias}' WOL sent via ThinQ cloud`;
-    } catch {
+    } catch (e2: any) {
+      console.log("[ThinQ] v2 WOL failed:", e2.response?.status, JSON.stringify(e2.response?.data));
       // Try v1
       try {
+        const url3 = `${gateway.thinq1Uri}/rti/rtiControl`;
+        console.log("[ThinQ] Trying v1 rtiControl:", url3);
         await axios.post(
-          `${gateway.thinq1Uri}/rti/rtiControl`,
+          url3,
           { cmd: "Control", cmdOpt: "WOL", deviceId: tv.deviceId, workId: crypto.randomUUID() },
           {
             headers: {
@@ -135,8 +241,9 @@ export const turnOnViaCloud = async (): Promise<string> => {
           }
         );
         return `TV '${tv.alias}' WOL sent via ThinQ v1`;
-      } catch (err: any) {
-        throw new Error(`ThinQ cloud control failed: ${err.message || err}`);
+      } catch (e3: any) {
+        console.log("[ThinQ] v1 rtiControl failed:", e3.response?.status, JSON.stringify(e3.response?.data));
+        throw new Error(`ThinQ cloud control failed: ${e3.response?.status} ${JSON.stringify(e3.response?.data) || e3.message}`);
       }
     }
   }
