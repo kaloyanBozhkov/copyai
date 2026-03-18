@@ -30,6 +30,11 @@ import {
   openSpotify,
 } from "../../helpers/lg";
 import {
+  setupThinQ,
+  listAllDevices as listThinQDevices,
+  clearDeviceCache as clearThinQDeviceCache,
+} from "../../helpers/lg/thinq";
+import {
   turnOnAC,
   turnOffAC,
   setACTemp,
@@ -1121,6 +1126,30 @@ export const execsPerCategory: Record<
         },
         "force?: string",
       ],
+      thinq_setup: [
+        async (args?: string[]) => {
+          if (!args || args.length < 2) {
+            return "Usage: tv.thinq_setup <email> <password> [country]\nExample: tv.thinq_setup user@email.com mypass BG";
+          }
+          const [email, password, countryArg] = args;
+          const country = countryArg?.toUpperCase() || "GB";
+          const langMap: Record<string, string> = {
+            GB: "en-GB", US: "en-US", DE: "de-DE", FR: "fr-FR",
+            IT: "it-IT", ES: "es-ES", KR: "ko-KR", JP: "ja-JP",
+            AU: "en-AU", NL: "nl-NL", BG: "bg-BG", PT: "pt-PT",
+          };
+          const language = langMap[country] || `en-${country}`;
+          return setupThinQ(email, password, country, language);
+        },
+        "email: string, password: string, country?: string (e.g. BG, GB, US)",
+      ],
+      thinq_devices: [async () => listThinQDevices()],
+      thinq_reset: [
+        () => {
+          clearThinQDeviceCache();
+          return "ThinQ TV device cache cleared. Will re-discover on next tv.on.";
+        },
+      ],
     }, // Aircon subcategory
     aircon: {
       on: [
@@ -1353,7 +1382,10 @@ export const execDescriptions: Record<string, string> = {
   "tv.screen_on": "Turn on the TV screen",
   "tv.screen_off": "Turn off the TV screen",
   "tv.volume": "Set TV volume (0-100)",
-  "tv.setup": "Setup TV connection",
+  "tv.setup": "Setup TV local WebSocket connection",
+  "tv.thinq_setup": "Setup LG ThinQ cloud (email + password)",
+  "tv.thinq_devices": "List devices on ThinQ account",
+  "tv.thinq_reset": "Clear cached ThinQ TV device",
   "tv.apps": "List available TV apps",
   "tv.open": "Open an app on TV",
   "tv.browse": "Open URL in TV browser",

@@ -2,6 +2,7 @@ import { cmdKitchen } from "../kitchen/cmdKitchen";
 import { closeActiveWindow } from "./actions";
 import { showCommandAutocompleteInput } from "../views/commandAutocompleteInput";
 import { showProcessingCommandView } from "../views/processingCommand";
+import { enableLogForwarding, disableLogForwarding } from "./consoleForwarder";
 
 let isProcessingCommand = false;
 
@@ -34,11 +35,13 @@ export const showInputWindowListener = async (isDevMode = false) => {
   });
 
   isProcessingCommand = true;
+  enableLogForwarding();
   try {
     const onCompletedProcessing = await showProcessingCommandView();
     const success = await cmdKitchen(cmdAccessor, args);
     onCompletedProcessing(success !== false);
   } finally {
+    disableLogForwarding();
     isProcessingCommand = false;
   }
 };

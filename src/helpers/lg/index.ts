@@ -5,6 +5,7 @@ import path from "path";
 import os from "os";
 import fs from "fs";
 import appsMap from "./apps.json";
+import { turnOnViaCloud, hasTokens } from "./thinq";
 
 // Disable SSL verification for LG TV's self-signed certificate
 // Only affects this connection, safe for local network
@@ -116,9 +117,24 @@ const connectAndExecute = <T>(
 };
 
 /**
- * Turn on the LG TV
+ * Turn on the LG TV.
+ * Tries ThinQ cloud first (works when TV is fully off), falls back to local WebSocket.
  */
 export const turnOnTV = async (): Promise<string> => {
+  // Try ThinQ cloud first (can wake TV from fully off state)
+  if (hasTokens()) {
+    try {
+      const result = await turnOnViaCloud();
+      return result;
+    } catch (error) {
+      console.log(
+        "ThinQ cloud wake failed, trying local WebSocket:",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }
+
+  // Fall back to local WebSocket (only works if TV is in standby with network active)
   try {
     await connectAndExecute(async (tv) => {
       return new Promise((resolve, reject) => {
@@ -130,7 +146,11 @@ export const turnOnTV = async (): Promise<string> => {
     });
     return "TV turned on";
   } catch (error) {
-    return `Failed to turn on TV: ${error instanceof Error ? error.message : String(error)}`;
+    const msg = error instanceof Error ? error.message : String(error);
+    if (!hasTokens()) {
+      return `Failed to turn on TV: ${msg}. Run tv.thinq_setup to enable cloud wake.`;
+    }
+    return `Failed to turn on TV: ${msg}`;
   }
 };
 
