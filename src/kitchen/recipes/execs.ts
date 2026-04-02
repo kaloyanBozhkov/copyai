@@ -28,6 +28,7 @@ import {
   openTVBrowser,
   openYouTube,
   openSpotify,
+  ensureTVOn,
 } from "../../helpers/lg";
 import { showCommandFormWindow } from "../../views/commandForm";
 import {
@@ -70,6 +71,7 @@ import path from "path";
 import os from "os";
 import { downloadMovie } from "../../helpers/webtorrent/downloadMovie";
 import { startTransferServer } from "../../helpers/transfer/transferServer";
+import { startFtpServer } from "../../helpers/ftp/ftpServer";
 import { streamMovie } from "../../helpers/webtorrent/streamMovie";
 import { parseSearchQuery } from "../../helpers/webtorrent/parseSearchQuery";
 import { downloadMovieSubs } from "../../helpers/subs/downloadSubs";
@@ -85,6 +87,7 @@ import {
   listSpotifyDevices,
   authorizeSpotify,
   exchangeCodeForTokens,
+  waitForSpotifyDevice,
 } from "../../helpers/spotify";
 import { addToWatchHistory } from "../../helpers/webtorrent/watchHistory";
 import { showWatchHistory } from "../../views/watchHistory";
@@ -854,10 +857,17 @@ export const execsPerCategory: Record<
   transfer: {
     server: [async () => startTransferServer()],
   },
+  ftp: {
+    start: [
+      async (args?: string[]) => startFtpServer(args?.[0]),
+      "receivePath?: string",
+    ],
+  },
   tv: {
     movie_stream: [
       async (args?: string[]) => {
         console.log("[TV] Starting movie stream with args:", args);
+        if (!await ensureTVOn()) return "Failed to wake TV";
         return streamMovieTorrent(args, (url) => {
           console.log("[TV] Stream ready, opening TV browser:", url);
           openTVBrowser(url);
@@ -869,6 +879,7 @@ export const execsPerCategory: Record<
     anime_stream: [
       async (args?: string[]) => {
         console.log("[TV] Starting anime stream with args:", args);
+        if (!await ensureTVOn()) return "Failed to wake TV";
         return streamAnimeTorrent(args, (url) => {
           console.log("[TV] Stream ready, opening TV browser:", url);
           openTVBrowser(url);
@@ -880,6 +891,7 @@ export const execsPerCategory: Record<
     screen_stream: [
       async () => {
         console.log("[TV] Starting screen stream");
+        if (!await ensureTVOn()) return "Failed to wake TV";
         return streamScreen({
           onStreamReady: (url) => {
             console.log("[TV] Screen stream ready, opening TV browser:", url);
@@ -1036,12 +1048,19 @@ export const execsPerCategory: Record<
     tv: {
       on: [async () => turnOnTV()],
       off: [async () => turnOffTV()],
-      screen_on: [async () => turnOnTVScreen()],
-      screen_off: [async () => turnOffTVScreen()],
+      screen_on: [async () => {
+        if (!await ensureTVOn()) return "Failed to wake TV";
+        return turnOnTVScreen();
+      }],
+      screen_off: [async () => {
+        if (!await ensureTVOn()) return "Failed to wake TV";
+        return turnOffTVScreen();
+      }],
       volume: [
         async (args?: string[]) => {
           const volume = parseInt(args?.[0] ?? "20", 10);
           if (isNaN(volume)) return "invalid volume number";
+          if (!await ensureTVOn()) return "Failed to wake TV";
           return setTVVolume(volume);
         },
         "volume: number",
@@ -1050,15 +1069,20 @@ export const execsPerCategory: Record<
         async (args?: string[]) => {
           const appIdOrName = args?.[0];
           if (!appIdOrName) return "no app ID or name provided";
+          if (!await ensureTVOn()) return "Failed to wake TV";
           return launchTVApp(appIdOrName);
         },
         "appId or appName: string",
       ],
-      list_apps: [async () => listTVApps()],
+      list_apps: [async () => {
+        if (!await ensureTVOn()) return "Failed to wake TV";
+        return listTVApps();
+      }],
       browser: [
         async (args?: string[]) => {
           const url = args?.[0];
           if (!url) return "no URL provided";
+          if (!await ensureTVOn()) return "Failed to wake TV";
           return openTVBrowser(url);
         },
         "url: string",
@@ -1067,6 +1091,7 @@ export const execsPerCategory: Record<
         async (args?: string[]) => {
           if (!args || args.length === 0)
             return "no search query or video provided";
+          if (!await ensureTVOn()) return "Failed to wake TV";
           const query = args.join(" ");
           return openYouTube(query);
         },
@@ -1075,6 +1100,7 @@ export const execsPerCategory: Record<
       spotify: [
         async (args?: string[]) => {
           if (!args || args.length === 0) return "no search query provided";
+          if (!await ensureTVOn()) return "Failed to wake TV";
           const query = args.join(" ");
           return openSpotify(query);
         },
@@ -1083,12 +1109,16 @@ export const execsPerCategory: Record<
       play_spotify: [
         async (args?: string[]) => {
           if (!args || args.length === 0) return "no song name provided";
+          if (!await ensureTVOn()) return "Failed to wake TV";
           const song = args.join(" ");
+          const tvDeviceName = getApiKey("SPOTIFY_TV_DEVICE_NAME") || undefined;
           await launchTVApp("spotify");
           await turnOnTVScreen().catch(() => { });
-          // await new Promise((resolve) => setTimeout(resolve, 3000));
-          const result = await playSpotify(song, false, undefined, getApiKey("SPOTIFY_TV_DEVICE_NAME") || undefined);
-          return result;
+          if (tvDeviceName) {
+            const device = await waitForSpotifyDevice(tvDeviceName);
+            if (!device) return `Spotify device "${tvDeviceName}" did not appear after launching the app`;
+          }
+          return playSpotify(song, false, undefined, tvDeviceName);
         },
         "song: string",
       ],
@@ -1102,12 +1132,18 @@ export const execsPerCategory: Record<
           const song = songParts.join(" ");
           if (!song) return "no song name provided";
 
+          if (!await ensureTVOn()) return "Failed to wake TV";
+
           await setRoomLightsBrightness("living-room-all", brightness, color).catch(() => { });
           await setRoomLightsBrightness("kitchen", brightness, color).catch(() => { });
 
+          const tvDeviceName = getApiKey("SPOTIFY_TV_DEVICE_NAME") || undefined;
           await launchTVApp("spotify");
-          // await new Promise((resolve) => setTimeout(resolve, 3000));
-          const result = await playSpotify(song, false, undefined, getApiKey("SPOTIFY_TV_DEVICE_NAME") || undefined);
+          if (tvDeviceName) {
+            const device = await waitForSpotifyDevice(tvDeviceName);
+            if (!device) return `Spotify device "${tvDeviceName}" did not appear after launching the app`;
+          }
+          const result = await playSpotify(song, false, undefined, tvDeviceName);
           await turnOnTVScreen().catch(() => { });
           return result;
         },

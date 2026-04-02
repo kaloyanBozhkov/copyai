@@ -121,7 +121,7 @@ const connectAndExecute = <T>(
 const getTV_MAC = () => getApiKey("LG_TV_MAC") || "7C:64:6C:A0:E4:51";
 
 /**
- * Send Wake-on-LAN magic packet to multiple broadcast addresses and ports.
+ * Send a single WOL magic packet on one socket, reused for all targets.
  */
 const sendWOL = (mac: string): Promise<void> => {
   const macBytes = Buffer.from(mac.replace(/:/g, ""), "hex");
@@ -130,43 +130,98 @@ const sendWOL = (mac: string): Promise<void> => {
     ...Array(16).fill(macBytes),
   ]);
 
-  const broadcasts = ["255.255.255.255", "192.168.1.255", "192.168.0.255"];
-  const ports = [7, 9];
+  return new Promise<void>((resolve, reject) => {
+    const sock = dgram.createSocket("udp4");
+    sock.once("error", (err) => {
+      sock.close();
+      reject(err);
+    });
+    sock.bind(() => {
+      sock.setBroadcast(true);
 
-  const promises = broadcasts.flatMap((broadcast) =>
-    ports.map(
-      (port) =>
-        new Promise<void>((resolve, reject) => {
-          const sock = dgram.createSocket("udp4");
-          sock.once("error", (err) => {
-            sock.close();
-            reject(err);
-          });
-          sock.bind(() => {
-            sock.setBroadcast(true);
-            sock.send(packet, 0, packet.length, port, broadcast, (err) => {
-              sock.close();
-              if (err) reject(err);
-              else resolve();
-            });
-          });
-        })
-    )
-  );
+      const targets = [
+        { addr: "255.255.255.255", port: 9 },
+        { addr: "192.168.1.255", port: 9 },
+        { addr: "192.168.0.255", port: 9 },
+      ];
 
-  return Promise.all(promises).then(() => {});
+      let i = 0;
+      const sendNext = () => {
+        if (i >= targets.length) {
+          // Small delay before close so the last packet flushes
+          setTimeout(() => sock.close(), 50);
+          resolve();
+          return;
+        }
+        const { addr, port } = targets[i++];
+        sock.send(packet, 0, packet.length, port, addr, (err) => {
+          if (err) console.error(`WOL send error to ${addr}:${port}:`, err);
+          sendNext();
+        });
+      };
+      sendNext();
+    });
+  });
 };
 
 /**
- * Turn on the LG TV via Wake-on-LAN.
+ * Check if the TV is reachable by attempting a WebSocket connection.
+ */
+const isTVAwake = (): Promise<boolean> =>
+  new Promise((resolve) => {
+    const ws = new WebSocket(TV_URL, { rejectUnauthorized: false });
+    const timer = setTimeout(() => {
+      ws.close();
+      resolve(false);
+    }, 3000);
+    ws.on("open", () => {
+      clearTimeout(timer);
+      ws.close();
+      resolve(true);
+    });
+    ws.on("error", () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+  });
+
+/**
+ * Ensure the TV is on — check first, send WOL if needed.
+ * Returns true if the TV is confirmed awake, false otherwise.
+ */
+export const ensureTVOn = async (): Promise<boolean> => {
+  if (await isTVAwake()) return true;
+  console.log("TV is off, sending WOL...");
+  const result = await turnOnTV();
+  return result.startsWith("TV is on");
+};
+
+/**
+ * Turn on the LG TV via Wake-on-LAN, then confirm it's awake.
  */
 export const turnOnTV = async (): Promise<string> => {
-  try {
-    await sendWOL(getTV_MAC());
-    return "TV WOL packet sent";
-  } catch (error) {
-    return `Failed to send WOL: ${error instanceof Error ? error.message : String(error)}`;
+  const mac = getTV_MAC();
+  const maxAttempts = 5;
+  const pollInterval = 2000;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await sendWOL(mac);
+    } catch (error) {
+      console.error(`WOL attempt ${attempt} failed:`, error);
+    }
+
+    // Wait then check if TV is responding
+    await new Promise((r) => setTimeout(r, pollInterval));
+
+    if (await isTVAwake()) {
+      return `TV is on (confirmed after ${attempt} attempt${attempt > 1 ? "s" : ""})`;
+    }
+
+    console.log(`TV not responding yet (attempt ${attempt}/${maxAttempts})...`);
   }
+
+  return "WOL packets sent but TV did not respond within timeout — it may still be booting";
 };
 
 /**

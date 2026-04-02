@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type Route = "command-input" | "processing-command" | "command-form" | "grimoire" | "watch-history" | "wiz-setup" | "wiz-control";
+export type Route = "command-input" | "processing-command" | "command-form" | "grimoire" | "watch-history" | "wiz-setup" | "wiz-control" | "ftp-transfer";
 
 interface RouteState {
   route: Route;

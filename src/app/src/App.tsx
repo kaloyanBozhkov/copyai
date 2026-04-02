@@ -8,6 +8,7 @@ import { WatchHistory } from "./components/WatchHistory";
 import { WizSetup } from "./components/WizSetup";
 import { WizControl } from "./components/WizControl";
 import { CommandForm } from "./components/CommandForm";
+import { FtpTransfer } from "./components/FtpTransfer";
 
 export default function App() {
   useInit();
@@ -18,7 +19,7 @@ export default function App() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const urlRoute = urlParams.get("route");
-    if (urlRoute === "grimoire" || urlRoute === "watch-history" || urlRoute === "wiz-setup" || urlRoute === "wiz-control") {
+    if (urlRoute === "grimoire" || urlRoute === "watch-history" || urlRoute === "wiz-setup" || urlRoute === "wiz-control" || urlRoute === "ftp-transfer") {
       setFullscreenRoute(urlRoute);
       setRoute(urlRoute);
     }
@@ -39,6 +40,10 @@ export default function App() {
 
   if (fullscreenRoute === "wiz-control" || route === "wiz-control") {
     return <WizControl />;
+  }
+
+  if (fullscreenRoute === "ftp-transfer" || route === "ftp-transfer") {
+    return <FtpTransfer />;
   }
 
   return (

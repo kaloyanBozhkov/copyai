@@ -60,6 +60,30 @@ const findUserPlaylist = async (
   }
 };
 
+/**
+ * Poll Spotify devices until a device matching `deviceName` appears.
+ * Returns the device id+name, or null if it never shows up.
+ */
+export const waitForSpotifyDevice = async (
+  deviceName: string,
+  { maxAttempts = 10, intervalMs = 2000 } = {}
+): Promise<{ id: string; name: string } | null> => {
+  const api = await getApi();
+  for (let i = 0; i < maxAttempts; i++) {
+    const result = await api.getMyDevices();
+    const match = result.body.devices.find(
+      (d) =>
+        d.id === deviceName ||
+        d.name?.toLowerCase().includes(deviceName.toLowerCase())
+    );
+    if (match?.id) return { id: match.id, name: match.name ?? deviceName };
+    if (i < maxAttempts - 1) {
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+  }
+  return null;
+};
+
 export const pauseSpotify = async (): Promise<string> => {
   try {
     const api = await getApi();
